@@ -56,6 +56,8 @@ ENDC   = "\033[0m"
 class Configuration:
 	player = None
 	resinfo = None
+	fnpattern = None
+	dtformat = None
 	
 OffsetT = namedtuple("Offset", "x y")
 SizeT = namedtuple("Size", "w h")
@@ -119,6 +121,10 @@ Image1920x1200 = ImageT("1920x1200",    # resolution
 CONFIG = Configuration()
 CONFIG.playername = "Beijing"
 CONFIG.resinfo = Image1920x1200
+CONFIG.fnpattern = r"\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}" # FRAPS Screenshot filename datetime pattern
+#CONFIG.fnpattern = r"\d{2}\.\d{2}\.\d{4}-\d{2}\.\d{2}\.\d{2}" # MWO Screenshot filename datetime pattern
+CONFIG.dtformat = "%Y-%m-%d %H-%M-%S" # FRAPS Screenshot filename datetime format
+#CONFIG.dtformat = "%m.%d.%Y-%H.%M.%S" # MWO Screenshot filename datetime format
 
 Maps = (
 	"Alpine Peaks",
@@ -151,66 +157,66 @@ PSR = (
 Mechs = (
 	"LCT-1E", "LCT-1M", "LCT-1V", "LCT-3M", "LCT-3S", "LCT-3V", "LCT-PB",
 	"COM-1B", "COM-1D", "COM-2D", "COM-3A", "COM-TDK",
-	"SDR-5D", "SDR-5K", "SDR-5K(C)", "SDR-5V", "SDR-A",
+	"SDR-5D", "SDR-5K", "SDR-5V", "SDR-A",
 	"UM-R60", "UM-R60L", "UM-R63",
-	"FS9-A", "FS9-E", "FS9-H", "FS9-K", "FS9-S", "FS9-S(C)",
-	"JR7-D", "JR7-D(S)", "JR7-F", "JR7-F(C)", "JR7-K", "JR7-O",
+	"FS9-A", "FS9-E", "FS9-H", "FS9-K", "FS9-S",
+	"JR7-D", "JR7-F", "JR7-K", "JR7-O",
 	"PNT-10K", "PNT-10P", "PNT-8Z", "PNT-9R",
-	"RVN-2X", "RVN-3L", "RVN-3L(C)", "RVN-4X", "RVN-H",
+	"RVN-2X", "RVN-3L", "RVN-4X", "RVN-H",
 	"WLF-1", "WLF-1A", "WLF-1B", "WLF-2",
 	"MLX-A", "MLX-B", "MLX-C", "MLX-D", "MLX-PRIME",
-	"ACH-A", "ACH-B", "ACH-C", "ACH-PRIME", "ACH-PRIME(C)",
+	"ACH-A", "ACH-B", "ACH-C", "ACH-PRIME",
 	"KFX-C", "KFX-D", "KFX-PRIME", "KFX-S",
 	"ADR-A", "ADR-B", "ADR-D", "ADR-PRIME",
 	"JR7-IIC", "JR7-IIC-2", "JR7-IIC-3", "JR7-IIC-A",
-	"CDA-2A", "CDA-2A(C)", "CDA-2B", "CDA-3C", "CDA-3F(L)", "CDA-3M", "CDA-X5",
-	"BJ-1", "BJ-1(C)", "BJ-1DC", "BJ-1X", "BJ-3", "BJ-A",
+	"CDA-2A", "CDA-2B", "CDA-3C", "CDA-3F", "CDA-3M", "CDA-X5",
+	"BJ-1", "BJ-1DC", "BJ-1X", "BJ-3", "BJ-A",
 	"VND-1AA", "VND-1R", "VND-1SIB", "VND-1X",
-	"CN9-A", "CN9-A(C)", "CN9-AH", "CN9-AL", "CN9-D", "CN9-YLW",
+	"CN9-A", "CN9-AH", "CN9-AL", "CN9-D", "CN9-YLW",
 	"CRB-20", "CRB-27", "CRB-27B", "CRB-27SL",
-	"ENF-4P", "ENF-4R", "ENF-4R(C)", "ENF-5D", "ENF-5P",
-	"HBK-4G", "HBK-4H", "HBK-4J", "HBK-4P", "HBK-4P(C)", "HBK-4SP", "HBK-GI",
-	"TBT-3C", "TBT-5J", "TBT-5N", "TBT-7K", "TBT-7M", "TBT-7M(C)", "TBT-LG",
-	"GRF-1E", "GRF-1N", "GRF-1S", "GRF-1S(C)", "GRF-2N", "GRF-3M",
-	"KTO-18", "KTO-18(C)", "KTO-19", "KTO-20", "KTO-GB",
-	"SHD-2D", "SHD-2D2", "SHD-2H", "SHD-2H(C)", "SHD-2K", "SHD-5M", "SHD-GD",
-	"WVR-6K", "WVR-6K(C)", "WVR-6R", "WVR-7D(L)", "WVR-7K", "WVR-Q",
+	"ENF-4P", "ENF-4R", "ENF-5D", "ENF-5P",
+	"HBK-4G", "HBK-4H", "HBK-4J", "HBK-4P", "HBK-4SP", "HBK-GI",
+	"TBT-3C", "TBT-5J", "TBT-5N", "TBT-7K", "TBT-7M", "TBT-LG",
+	"GRF-1E", "GRF-1N", "GRF-1S", "GRF-2N", "GRF-3M",
+	"KTO-18", "KTO-19", "KTO-20", "KTO-GB",
+	"SHD-2D", "SHD-2D2", "SHD-2H", "SHD-2K", "SHD-5M", "SHD-GD",
+	"WVR-6K", "WVR-6R", "WVR-7D", "WVR-7K", "WVR-Q",
 	"IFR-A", "IFR-B", "IFR-C", "IFR-D", "IFR-PRIME",
 	"SHC-A", "SHC-B", "SHC-P", "SHC-PRIME",
 	"HBK-IIC", "HBK-IIC-A", "HBK-IIC-B", "HBK-IIC-C",
-	"NVA-A", "NVA-B", "NVA-C", "NVA-D(L)", "NVA-PRIME", "NVA-S",
-	"SCR-A", "SCR-B", "SCR-C", "SCR-D", "SCR-PRIME", "SCR-PRIME(C)",
-	"DRG-1C", "DRG-1N", "DRG-5N", "DRG-5N(C)", "DRG-FANG", "DRG-FLAME",
-	"QKD-4G", "QKD-4G(C)", "QKD-4H", "QKD-5K", "QKD-IV4",
-	"CPLT-A1", "CPLT-A1(C)", "CPLT-C1", "CPLT-C4", "CPLT-J", "CPLT-K2",
-	"JM6-A", "JM6-A(C)", "JM6-DD", "JM6-FB", "JM6-S",
-	"TDR-5S", "TDR-TD", "TDR-5SS", "TDR-9S", "TDR-9SE", "TDR-9SE(C)",
-	"CTF-0XP", "CTF-1X", "CTF-2X", "CTF-3D", "CTF-3D(C)", "CTF-4X", "CTF-IM",
+	"NVA-A", "NVA-B", "NVA-C", "NVA-D", "NVA-PRIME", "NVA-S",
+	"SCR-A", "SCR-B", "SCR-C", "SCR-D", "SCR-PRIME",
+	"DRG-1C", "DRG-1N", "DRG-5N", "DRG-FANG", "DRG-FLAME",
+	"QKD-4G", "QKD-4H", "QKD-5K", "QKD-IV4",
+	"CPLT-A1", "CPLT-C1", "CPLT-C4", "CPLT-J", "CPLT-K2",
+	"JM6-A", "JM6-DD", "JM6-FB", "JM6-S",
+	"TDR-5S", "TDR-TD", "TDR-5SS", "TDR-9S", "TDR-9SE",
+	"CTF-0XP", "CTF-1X", "CTF-2X", "CTF-3D", "CTF-4X", "CTF-IM",
 	"GHR-5H", "GHR-5J", "GHR-5N", "GHR-5P",
 	"BL-6-KNT", "BL-6B-KNT", "BL-7-KNT", "BL-7-KNT-L",
 	"MAD-3R", "MAD-5D", "MAD-5M", "MAD-BH2",
-	"ON1-K", "ON1-K(C)", "ON1-M", "ON1-P", "ON1-V", "ON1-VA",
+	"ON1-K", "ON1-M", "ON1-P", "ON1-V", "ON1-VA",
 	"MDD-A", "MDD-B", "MDD-C", "MDD-PRIME",
 	"EBJ-A", "EBJ-B", "EBJ-C", "EBJ-PRIME",
 	"HBR-A", "HBR-B", "HBR-PRIME",
 	"SMN-B", "SMN-C", "SMN-D", "SMN-PRIME",
 	"ON1-IIC", "ON1-IIC-A", "ON1-IIC-B", "ON1-IIC-C",
-	"TBR-A", "TBR-C", "TBR-C(C)", "TBR-D", "TBR-PRIME", "TBR-S",
+	"TBR-A", "TBR-C", "TBR-D", "TBR-PRIME", "TBR-S",
 	"AWS-8Q", "AWS-8R", "AWS-8T", "AWS-8V", "AWS-9M", "AWS-PB",
-	"VTR-9B", "VTR-9K", "VTR-9S", "VTR-9S(C)", "VTR-DS",
-	"ZEU-5S", "ZEU-6S", "ZEU-6T", "ZEU-9S", "ZEU-9S2(L)",
+	"VTR-9B", "VTR-9K", "VTR-9S", "VTR-DS",
+	"ZEU-5S", "ZEU-6S", "ZEU-6T", "ZEU-9S", "ZEU-9S2",
 	"BLR-1D", "BLR-1G", "BLR-1GHE", "BLR-1S", "BLR-2C", "BLR-3M", "BLR-3C",
-	"STK-3F", "STK-3F(C)", "STK-3H", "STK-4N", "STK-5M", "STK-5S", "STK-M",
-	"HGN-732", "HGN-732B", "HGN-733", "HGN-733C", "HGN-733C(C)", "HGN-733P", "HGN-HM",
+	"STK-3F", "STK-3H", "STK-4N", "STK-5M", "STK-5S", "STK-M",
+	"HGN-732", "HGN-732B", "HGN-733", "HGN-733C", "HGN-733P", "HGN-HM",
 	"MAL-1P", "MAL-1R", "MAL-2P", "MAL-MX90",
-	"BNC-3E", "BNC-3M", "BNC-3M(C)", "BNC-3S", "BNC-LM",
-	"AS7-BH", "AS7-D", "AS7-D-DC", "AS7-K", "AS7-RS", "AS7-RS(C)", "AS7-S",
-	"KGC-000", "KGC-0000", "KGC-000B", "KGC-000B(C)",
+	"BNC-3E", "BNC-3M", "BNC-3S", "BNC-LM",
+	"AS7-BH", "AS7-D", "AS7-D-DC", "AS7-K", "AS7-RS", "AS7-S",
+	"KGC-000", "KGC-0000", "KGC-000B",
 	"GAR-A", "GAR-B", "GAR-C", "GAR-D", "GAR-PRIME",
 	"WHK-A", "WHK-B", "WHK-C", "WHK-PRIME",
 	"HGN-IIC", "HGN-IIC-A", "HGN-IIC-B", "HGN-IIC-C",
-	"EXE-A", "EXE-B", "EXE-C(L)", "EXE-D", "EXE-PRIME",
-	"DWF-A", "DWF-B", "DWF-PRIME", "DWF-S", "DWF-W", "DWF-W(C)",
+	"EXE-A", "EXE-B", "EXE-C", "EXE-D", "EXE-PRIME",
+	"DWF-A", "DWF-B", "DWF-PRIME", "DWF-S", "DWF-W",
 )
 
 def debug(txt):
@@ -649,12 +655,17 @@ def main():
 		file1 = files.pop()
 		file2 = files.pop()
 		log(file1 + " " + file2)
+
+		match = re.search(CONFIG.fnpattern, file1)
+		if not match:
+			error("Screenshot filename pattern: No match")
+			continue
+		datetime = time.strptime(match.group(), CONFIG.dtformat)
+
 		file1 = "./input/" + file1
 		file2 = "./input/" + file2
-		filedate = file1.replace("./input/MWOClient ", "")[:-7]
-		filedate = time.strptime(filedate, "%Y-%m-%d %H-%M-%S")
-		id = time.strftime("%Y-%m-%d %H-%M-%S", filedate)
-		filedate = time.strftime("%Y-%m-%d %H:%M:%S", filedate)
+		id = time.strftime("%Y-%m-%d %H-%M-%S", datetime)
+		filedate = time.strftime("%Y-%m-%d %H:%M:%S", datetime)
 		with Image.open(file1) as img:
 			img = preprocess(img, id, "team")
 			(dist, map) = getmap(img, id, file1)
@@ -671,14 +682,15 @@ def main():
 
 		debug("%s,%s,%s,%s,%s,%d,%d,%d,%d,%d,%d,%d,%s,%s" % (filedate, result, mech, map, mode, status, score, kills, assists, damage, xp, cbills, psr, mytime))
 
-		with open("./output/data.csv", "a") as myfile:
-			myfile.write("%s,%s,%s,%s,%s,%d,%d,%d,%d,%d,%d,%d,%s,%s\n" % (filedate, result, mech, map, mode, status, score, kills, assists, damage, xp, cbills, psr, mytime))
 		shutil.move(file1, "./processed")
 		shutil.move(file2, "./processed")
 
+		with open("./output/data.csv", "a") as myfile:
+			myfile.write("%s,%s,%s,%s,%s,%d,%d,%d,%d,%d,%d,%d,%s,%s\n" % (filedate, result, mech, map, mode, status, score, kills, assists, damage, xp, cbills, psr, mytime))
+
 		print
 
-	log("Finished")
+	success("Finished")
 	return
 	
 if __name__ == "__main__":

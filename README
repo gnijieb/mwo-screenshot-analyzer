@@ -1,3 +1,30 @@
 mwo-screenshot-analyzer
 Contact: gnijieb@gmail.com
 Github: https://github.com/gnijieb/mwo-screenshot-analyzer
+
+Warning
+Only 1920x1200 resolution supported at the moment
+The script is still pretty rough (code), though works surprisingly well (analyzed ~240 games -> matched my manually entered data almost perfectly)
+
+Requirements
+- Linux or Cygwin (looking to make it runnable in Windows)
+- Python 2.7
+- Tesseract
+- Python modules: python-Levenshtein, pytesseract
+- You need screenshots of both the player and team stats (end of round) in a specific order:
+	- first: teamstats
+	- second: playerstats
+
+Usage
+- clone repo
+- create directories: input, output, intermediate, processed
+- search in analyze.py for "CONFIG" parameters
+- set CONFIG.playername to the playername you want to analyze (obviously it will work only with your name)
+- set CONFIG.resinfo (resolution information of locations of the to be extracted data, currently only available for 1920x1200 resolution; extendable)
+- set CONFIG.fnpattern (MWO or FRAPS - this is how the filename of the screenshots is formatted to parse it)
+- set CONFIG.dtformat (MWO or FRAPS - this is how the datetime gets parsed from the filename of the screenshots)
+- place your screenshots in input directory
+- run analyze.py
+- if something is not recognized correctly or as expected, you are asked to open the image in input folder and enter the desired value
+- processed screenshots are moved to the processed folder
+- the result is in form of CSV in: output/data.csv
