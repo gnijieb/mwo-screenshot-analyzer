@@ -21,8 +21,8 @@ Usage
 - search in analyze.py for "CONFIG" parameters
 - set CONFIG.playername to the playername you want to analyze (obviously it will work only with your name)
 - set CONFIG.resinfo (resolution information of locations of the to be extracted data, currently only available for 1920x1200 resolution; extendable)
-- set CONFIG.fnpattern (MWO or FRAPS - this is how the filename of the screenshots is formatted to parse it)
-- set CONFIG.dtformat (MWO or FRAPS - this is how the datetime gets parsed from the filename of the screenshots)
+- set CONFIG.fnpattern (MWO or FRAPS - comment in the correct one for you - this is how the filename of the screenshots is formatted to parse it)
+- set CONFIG.dtformat (MWO or FRAPS - comment in the correct one for you - this is how the datetime gets parsed from the filename of the screenshots)
 - place your screenshots in input directory
 - run analyze.py
 - if something is not recognized correctly or as expected, you are asked to open the image in input folder and enter the desired value
