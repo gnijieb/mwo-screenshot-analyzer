@@ -46,7 +46,7 @@ import time
 
 DEBUG = 2
 LOG   = 1
-loglevel = LOG
+loglevel = DEBUG
 
 RED    = "\033[91;1m"
 GREEN  = "\033[92;1m"
@@ -428,7 +428,11 @@ def getplayerdata(img, id, filename):
 		CONFIG.resinfo.entrysize.h
 	)
 	crop = None
-	playerfound = False
+	playerfound = None
+	selectedrow = None
+	dist = 100
+	jaro_val = 0.0
+	ratio_val = 0.0
 	while row < 24:
 		y = CONFIG.resinfo.entryposy[row]
 		crop = img.crop((x, y, x+w, y+h))
@@ -443,34 +447,32 @@ def getplayerdata(img, id, filename):
 
 		# if playername already matches, success
 		if rawplayer.lower() == CONFIG.playername.lower():
-			playerfound = True
-			success("Found Player: \"%s\" with distance=0" % CONFIG.playername)
-			#crop.save("./intermediate/%s_player.png" % id)
+			playerfound = rawplayer
+			selectedrow = row
+			dist = 0
+			jaro_val = 1.0
+			ratio_val = 1.0
 			break
 
-		dist = 100
-		jaro_val = 0.0
-		ratio_val = 0.0
 		#testlev(CONFIG.playername.lower(), rawplayer.lower())
-		dist = distance(CONFIG.playername.lower(), rawplayer.lower())
-		jaro_val = jaro(CONFIG.playername.lower(), rawplayer.lower())
-		ratio_val = ratio(CONFIG.playername.lower(), rawplayer.lower())
-
+		tmpdist = distance(CONFIG.playername.lower(), rawplayer.lower())
+		tmpjaro_val = jaro(CONFIG.playername.lower(), rawplayer.lower())
+		tmpratio_val = ratio(CONFIG.playername.lower(), rawplayer.lower())
+		
 		# check the quality of the found string
-		if dist <= len(CONFIG.playername)*0.5 and (jaro_val >= 0.5 or ratio_val >= 0.5):
-			playerfound = True
-			success("Found Player: \"%s\" with distance=%s" % (CONFIG.playername, repr(dist)))
-			#crop.save("./intermediate/%s_player.png" % id)
-			break
+		if tmpdist <= dist and (tmpjaro_val >= 0.5 or tmpratio_val >= 0.5):
+			playerfound = rawplayer
+			selectedrow = row
+			dist = tmpdist
+			jaro_val = tmpjaro_val
+			ratio_val = tmpratio_val
 		row += 1
 	
-	if not playerfound:
-		error("Could not determine row of player data")
-		print("Check image for correct row number location: " + filename)
-		row = int(input("Enter row number (1-24): ")) - 1
-		
+	success("Found Player: \"%s\" (searched for \"%s\") with distance=%s" % (playerfound, CONFIG.playername, repr(dist)))
+	#crop.save("./intermediate/%s_player.png" % id)
+
 	result = None
-	if row < 12:
+	if selectedrow < 12:
 		result = "Victory"
 	else:
 		result = "Defeat"
@@ -610,6 +612,14 @@ def getxp(img, id, filename):
 
 	return xp
 
+def checkpixelcolor((r1,g1,b1), (r2, g2, b2), factor):
+	if r1 >= r2-255*factor and r1 <= r2+255*factor and \
+		g1 >= g2-255*factor and g1 <= g2+255*factor and \
+		b1 >= b2-255*factor and b1 <= b2+255*factor:
+		return True
+	else:
+		return False
+
 def getpsr(img, id, filename):
 	row = 0
 	y = 0
@@ -618,12 +628,13 @@ def getpsr(img, id, filename):
 		CONFIG.resinfo.psr.y,
 	)
 	pixel = img.getpixel((x, y))
-	if pixel == CONFIG.resinfo.psrup:
+	debug(repr(pixel))
+	if checkpixelcolor(CONFIG.resinfo.psrup, pixel, 0.1):
 		return "Up"
-	elif pixel == CONFIG.resinfo.psrdown:
-		return "Down"
-	elif pixel == CONFIG.resinfo.psrnone:
+	elif checkpixelcolor(CONFIG.resinfo.psrnone, pixel, 0.1):
 		return "None"
+	elif checkpixelcolor(CONFIG.resinfo.psrdown, pixel, 0.25):
+		return "Down"
 	else:
 		error("Could not determine PSR")
 		# PSR could not be determined from pixel
