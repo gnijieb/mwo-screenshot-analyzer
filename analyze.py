@@ -46,7 +46,7 @@ import time
 
 DEBUG = 2
 LOG   = 1
-loglevel = DEBUG
+loglevel = LOG
 
 RED    = "\033[91;1m"
 GREEN  = "\033[92;1m"
@@ -431,8 +431,8 @@ def getplayerdata(img, id, filename):
 	playerfound = None
 	selectedrow = None
 	dist = 100
-	jaro_val = 0.0
-	ratio_val = 0.0
+	fjaro = 0.0
+	fratio = 0.0
 	while row < 24:
 		y = CONFIG.resinfo.entryposy[row]
 		crop = img.crop((x, y, x+w, y+h))
@@ -450,22 +450,22 @@ def getplayerdata(img, id, filename):
 			playerfound = rawplayer
 			selectedrow = row
 			dist = 0
-			jaro_val = 1.0
-			ratio_val = 1.0
+			fjaro = 1.0
+			fratio = 1.0
 			break
 
 		#testlev(CONFIG.playername.lower(), rawplayer.lower())
 		tmpdist = distance(CONFIG.playername.lower(), rawplayer.lower())
-		tmpjaro_val = jaro(CONFIG.playername.lower(), rawplayer.lower())
-		tmpratio_val = ratio(CONFIG.playername.lower(), rawplayer.lower())
+		tmpjaro = jaro(CONFIG.playername.lower(), rawplayer.lower())
+		tmpratio = ratio(CONFIG.playername.lower(), rawplayer.lower())
 		
 		# check the quality of the found string
-		if tmpdist <= dist and (tmpjaro_val >= 0.5 or tmpratio_val >= 0.5):
+		if tmpdist <= dist and (tmpjaro >= 0.5 or tmpratio >= 0.5):
 			playerfound = rawplayer
 			selectedrow = row
 			dist = tmpdist
-			jaro_val = tmpjaro_val
-			ratio_val = tmpratio_val
+			fjaro = tmpjaro
+			fratio = tmpratio
 		row += 1
 	
 	success("Found Player: \"%s\" (searched for \"%s\") with distance=%s" % (playerfound, CONFIG.playername, repr(dist)))
@@ -486,45 +486,73 @@ def getplayerdata(img, id, filename):
 		if rawmech.lower() == mech.lower():
 			mechfound = True
 			correctmech = mech
-			success("Found Mech: \"%s\" with distance=0" % mech)
 
 	if not mechfound:
 		dist = 100
-		jaro_val = 0.0
-		ratio_val = 0.0
+		fjaro = 0.0
+		fratio = 0.0
 		correctmech = None
+		possiblemechs = []
 		for mechname in Mechs:
 			#testlev(modename.lower(), rawmode.lower())
-			tmp = distance(mechname.lower(), rawmech.lower())
-			if tmp < dist:
-				dist = tmp
-				jaro_val = jaro(mechname.lower(), rawmech.lower())
-				ratio_val = ratio(mechname.lower(), rawmech.lower())
+			tmp_dist = distance(mechname.lower(), rawmech.lower())
+			tmp_jaro = jaro(mechname.lower(), rawmech.lower())
+			tmp_ratio = ratio(mechname.lower(), rawmech.lower())
+			#debug("Check mech match: %s (dist %d, jaro %4.4f, ratio %4.4f)" % (mechname, tmp_dist, tmp_jaro, tmp_ratio))
+			
+			if tmp_jaro > fjaro:
+				fjaro = tmp_jaro
+				jaro_mech = mechname
+				
+			if tmp_ratio > fratio:
+				fratio = tmp_ratio
+				ratio_mech = mechname
+				
+			# found better match
+			if tmp_dist < dist:
+				# TODO: remember each better match in list
+				dist = tmp_dist
+				dist_mech = mechname
 				correctmech = mechname
+		
+			# build list of possible matches
+			if tmp_jaro >= 0.5 and tmp_ratio >= 0.5:
+				possiblemechs.append(mechname)
+				debug("Possible jaro/ratio match: %s (%4.4f, %4.4f)" % (mechname, tmp_jaro, tmp_ratio))
 
+		debug("Best dist match: %s (%d)" % (dist_mech, dist))
+		debug("Best jaro match: %s (%4.4f)" % (jaro_mech, fjaro))
+		debug("Best ratio match: %s (%4.4f)" % (ratio_mech, fratio))
+		
 		# check the quality of the found string
-		if dist > len(rawmech)*0.6 and jaro_val < 0.5 and ratio_val < 0.5:
-			error("Could not determine mech from input: \"%s\"" % rawmech)
+		if dist > len(rawmech)*0.6 and fjaro < 0.5 and fratio < 0.5:
+			debug("Quality of found mech not good enough.")
 		else:
 			mechfound = True
-			success("Found Mech: \"%s\" with distance=%s" % (correctmech, repr(dist)))
 		
-		if not mechfound:
-			# Mode could not be determined from input
+		if not mechfound or dist >= 3:
+			error("Could not determine mech from input: \"%s\"" % rawmech)
+			print("Check image for mech: " + filename)
+			# Mech could not be determined from input
 			# ask for user input
 			i = 0
-			for mechname in Mechs:
+			print(repr(0) + ": manual")
+			for mechname in possiblemechs:
 				print(repr(i+1) + ": " + mechname)
 				i+=1
 			x = -1
 			print("Check image for mech: " + filename)
-			while x < 0 or x > len(Mechs):
+			while x < 0 or x > len(possiblemechs):
 				x = int(input("Enter mech number: "))
 				log("Mech entered: " + repr(x))
-			correctmech = Mechs[x-1]
+			if x == 0:
+				correctmech = raw_input("Enter mech name: ")
+			else:
+				correctmech = possiblemechs[x-1]
 
 	# remove brackets in mechname (e.g. (C), (I), (S) and so on)
 	correctmech = re.sub(r"\(.\)", "", correctmech)
+	success("Found Mech: \"%s\" with distance=%s" % (correctmech, repr(dist)))
 	
 	cropstatus = crop.crop((CONFIG.resinfo.status.x, 0, CONFIG.resinfo.status.x + CONFIG.resinfo.status.w, h))
 	rawstatus = pytesseract.image_to_string(cropstatus, lang="eng", config="-psm 6")
