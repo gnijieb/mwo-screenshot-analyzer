@@ -4,7 +4,25 @@ Github: https://github.com/gnijieb/mwo-screenshot-analyzer
 
 Warning
 Only 1920x1200 resolution supported at the moment
-The script is still pretty rough (code), though works surprisingly well (analyzed ~240 games -> matched my manually entered data almost perfectly)
+The script is still pretty rough (code), though works surprisingly well (analyzed >500 games -> matched my manually entered data almost perfectly)
+
+Installation on Windows
+- Download Python installer (at time of writing used version was 2.7.11): https://www.python.org/downloads/release/python-2711/
+	- Make sure to tick the option "Add python.exe to Path"
+
+- Get Python modules:
+	- update pip first: python -m pip install -U pip
+	- Levenshtein:
+		- Download precompiled from: http://www.lfd.uci.edu/~gohlke/pythonlibs/#python-levenshtein
+		- Run: pip install python_Levenshtein-0.12.0-cp27-none-win32.whl
+	- Python Imaging Library (PIL fork): Pillow
+		- pip install Pillow
+	- tesseract-ocr
+		- TODO: Evaluate module tesserocr
+		- Download from: https://github.com/UB-Mannheim/tesseract/wiki
+			- Alternate: https://github.com/tesseract-ocr/tesseract/wiki/Downloads
+			- In installer tick registry settings for PATH
+		- pip install pytesseract
 
 Requirements
 - Linux or Cygwin (looking to make it runnable in Windows)

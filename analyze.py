@@ -18,24 +18,6 @@
 
 from collections import namedtuple
 from subprocess import call
-
-# https://pypi.python.org/pypi/python-Levenshtein/0.12.0
-# require package: python-dev, python-pip
-# sudo pip install 'python-Levenshtein'
-from Levenshtein import *
-
-# https://pypi.python.org/pypi/pytesseract
-# require package: python-imaging, tesseract-ocr
-# sudo pip install 'pytesseract'
-#try:
-#	import Image, ImageFilter
-#	print("Image imported")
-#except ImportError:
-from PIL import Image, ImageFilter, ImageOps, ImageEnhance
-#	print("PIL Image imported")
-
-import pytesseract
-
 import re
 import string
 import shutil
@@ -43,15 +25,25 @@ from os import listdir
 from os.path import isfile, join
 import shutil
 import time
+import ConfigParser
+import getopt
+
+from Levenshtein import *
+from PIL import Image, ImageFilter, ImageOps, ImageEnhance
+import pytesseract
 
 DEBUG = 2
 LOG   = 1
-loglevel = LOG
+loglevel = DEBUG
 
-RED    = "\033[91;1m"
-GREEN  = "\033[92;1m"
-YELLOW = "\033[93;1m"
-ENDC   = "\033[0m"
+#RED    = "\033[91;1m"
+#GREEN  = "\033[92;1m"
+#YELLOW = "\033[93;1m"
+#ENDC   = "\033[0m"
+RED = ""
+GREEN = ""
+YELLOW = ""
+ENDC = ""
 
 class Configuration:
 	player = None
@@ -65,16 +57,67 @@ AreaT = namedtuple("Area", "offset size")
 EntryT = namedtuple("Entry", "x, w")	# the x offset and width of e.g. playername in cropped entry
 ImageT = namedtuple("Image", "resolution psr psrup psrdown psrnone map mode time result entrysize entryposx entryposy player mech status score kills assists damage cbills xp")
 
+PixelT = namedtuple("Pixel", "x y")
+ColorT = namedtuple("Color", "r g b")
+RectangleT = namedtuple("Rectangle", "x1 y1 x2 y2")
+ImageNewT = namedtuple("ImageNew", "resolution psr psrup psrdown psrnone map mode time result entrysize entryposx entryposy player mech status score kills assists damage cbills xp")
+
+Image1920x1200new = ImageNewT("1920x1200",    # resolution
+		PixelT(1092, 677),		# psr pixel and corresponding color values for up/down/equal
+		ColorT(168, 214, 96),			# psr up color (r,g,b)
+		ColorT(255, 44, 44),			# psr down color (r,g,b)
+		ColorT(255, 255, 0),			# psr none color (r,g,b)
+        RectangleT(845, 80, 1097, 115),	# map
+        RectangleT(1109, 80, 1345, 115),	# mode
+        RectangleT(1560, 80, 1628, 115),	# time
+        RectangleT(835, 165, 1070, 210),	# result
+		[
+        RectangleT(650, 240, 650+877, 240+23),		# entry row 1
+        RectangleT(650, 266, 650+877, 266+23),		# entry row 2
+        RectangleT(650, 292, 650+877, 292+23),		# entry row 3
+        RectangleT(650, 318, 650+877, 318+23),		# entry row 4
+        RectangleT(650, 350, 650+877, 350+23),		# entry row 5
+        RectangleT(650, 376, 650+877, 376+23),		# entry row 6
+        RectangleT(650, 402, 650+877, 402+23),		# entry row 7
+        RectangleT(650, 428, 650+877, 428+23),		# entry row 8
+        RectangleT(650, 461, 650+877, 461+23),		# entry row 9
+        RectangleT(650, 487, 650+877, 487+23),		# entry row 10
+        RectangleT(650, 512, 650+877, 512+23),		# entry row 11
+        RectangleT(650, 537, 650+877, 537+23),		# entry row 12
+        RectangleT(650, 576, 650+877, 576+23),		# entry row 13
+        RectangleT(650, 603, 650+877, 603+23),		# entry row 14
+        RectangleT(650, 629, 650+877, 629+23),		# entry row 15
+        RectangleT(650, 655, 650+877, 655+23),		# entry row 16
+        RectangleT(650, 687, 650+877, 687+23),		# entry row 17
+        RectangleT(650, 712, 650+877, 712+23),		# entry row 18
+        RectangleT(650, 738, 650+877, 738+23),		# entry row 19
+        RectangleT(650, 764, 650+877, 764+23),		# entry row 20
+        RectangleT(650, 798, 650+877, 798+23),		# entry row 21
+        RectangleT(650, 823, 650+877, 823+23),		# entry row 22
+        RectangleT(650, 849, 650+877, 849+23),		# entry row 23
+        RectangleT(650, 874, 650+877, 874+23),		# entry row 24
+		],
+		EntryT(73, 240),		# player
+		EntryT(315, 140),		# mech
+		EntryT(457, 50),		# status (alive/dead)
+		EntryT(595, 45),		# matchscore
+		EntryT(692, 25),		# kills
+		EntryT(757, 25),		# assists
+		EntryT(827, 49),		# damage
+		RectangleT(350, 295, 650, 395),		# cbills
+		RectangleT(1270, 295, 1520, 395),	# xp
+        )
+
 Image1920x1200 = ImageT("1920x1200",    # resolution
 		OffsetT(1092, 677),		# psr pixel and corresponding color values for up/down/equal
 		(168, 214, 96),			# psr up color (r,g,b)
 		(255, 44, 44),			# psr down color (r,g,b)
 		(255, 255, 0),			# psr none color (r,g,b)
         AreaT(OffsetT(845, 80), SizeT(252, 35)),         # map
-        AreaT(OffsetT(1239, 80), SizeT(106, 35)),        # mode
+        AreaT(OffsetT(1109, 80), SizeT(236, 35)),        # mode
         AreaT(OffsetT(1560, 80), SizeT(68, 35)),         # time
         AreaT(OffsetT(835, 165), SizeT(235, 45)),        # result
-        SizeT(877, 23),                  # entry size
+        SizeT(877, 23),                  # entry size (the row of player data)
         650,                            # entry pos x
         [                               # entry pos y list
         240,         # entry 0
@@ -126,98 +169,17 @@ CONFIG.fnpattern = r"\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}" # FRAPS Screenshot fil
 CONFIG.dtformat = "%Y-%m-%d %H-%M-%S" # FRAPS Screenshot filename datetime format
 #CONFIG.dtformat = "%m.%d.%Y-%H.%M.%S" # MWO Screenshot filename datetime format
 
-Maps = (
-	"Alpine Peaks",
-	"Canyon Network",
-	"Caustic Valley",
-	"Crimson Strait",
-	"Forest Colony",
-	"Frozen City",
-	"Frozen City Night",
-	"HPG Manifold",
-	"The Mining Collective",
-	"River City",
-	"Terra Therma",
-	"Tourmaline Desert",
-	"Viridian Bog"
-)
+with open("basedata/maps.txt") as f:
+	Maps = [line.rstrip("\n") for line in f]
 
-Modes = (
-	"Assault",
-	"Conquest",
-	"Skirmish"
-)
+with open("basedata/gamemodes.txt") as f:
+	Modes = [line.rstrip("\n") for line in f]
 
-PSR = (
-	"Up",
-	"Down",
-	"None"
-)
+with open("basedata/psr.txt") as f:
+	PSR = [line.rstrip("\n") for line in f]
 
-Mechs = (
-	"LCT-1E", "LCT-1M", "LCT-1V", "LCT-1V(P)", "LCT-3M", "LCT-3S", "LCT-3V", "LCT-PB",
-	"COM-1B", "COM-1D", "COM-2D", "COM-3A", "COM-TDK",
-	"SDR-5D", "SDR-5K", "SDR-5K(C)", "SDR-5V", "SDR-A",
-	"UM-R60", "UM-R60L", "UM-R63", "UM-R63(S)",
-	"FS9-A", "FS9-E", "FS9-H", "FS9-K", "FS9-S", "FS9-S(C)",
-	"JR7-D", "JR7-D(F)", "JR7-D(S)", "JR7-F", "JR7-F(C)", "JR7-K", "JR7-O",
-	"PNT-10K", "PNT-10K(R)", "PNT-10P", "PNT-8Z", "PNT-9R",
-	"RVN-2X", "RVN-3L", "RVN-3L(C)", "RVN-4X", "RVN-H",
-	"WLF-1", "WLF-1A", "WLF-1B", "WLF-2", "WLF-2(R)",
-	"MLX-A", "MLX-B", "MLX-C", "MLX-D", "MLX-PRIME", "MLX-PRIME(I)",
-	"ACH-A", "ACH-B", "ACH-C", "ACH-PRIME", "ACH-PRIME(C)", "ACH-PRIME(I)",
-	"KFX-C", "KFX-D", "KFX-PRIME", "KFX-PRIME(I)", "KFX-S",
-	"ADR-A", "ADR-B", "ADR-D", "ADR-PRIME", "ADR-PRIME(I)",
-	"JR7-IIC", "JR7-IIC(O)", "JR7-IIC-2", "JR7-IIC-3", "JR7-IIC-A",
-	"CDA-2A", "CDA-2A(C)", "CDA-2B", "CDA-3C", "CDA-3F(L)", "CDA-3M", "CDA-X5",
-	"BJ-1", "BJ-1(C)", "BJ-1DC", "BJ-1X", "BJ-3", "BJ-A",
-	"VND-1AA", "VND-1R", "VND-1SIB", "VND-1X",
-	"CN9-A", "CN9-A(C)", "CN9-AH", "CN9-AH(L)", "CN9-AL", "CN9-D", "CN9-YLW",
-	"CRB-20", "CRB-27", "CRB-27(R)", "CRB-27B", "CRB-27SL",
-	"ENF-4P", "ENF-4R", "ENF-4R(C)", "ENF-5D", "ENF-5D(R)", "ENF-5P",
-	"HBK-4G", "HBK-4G(F)", "HBK-4H", "HBK-4J", "HBK-4P", "HBK-4P(C)", "HBK-4SP", "HBK-GI",
-	"TBT-3C", "TBT-5J", "TBT-5N", "TBT-7K", "TBT-7M", "TBT-7M(C)", "TBT-LG",
-	"GRF-1E", "GRF-1N", "GRF-1N(P)", "GRF-1S", "GRF-1S(C)", "GRF-2N", "GRF-3M",
-	"KTO-18", "KTO-18(C)", "KTO-19", "KTO-20", "KTO-GB",
-	"SHD-2D", "SHD-2D2", "SHD-2H", "SHD-2H(P)", "SHD-2H(C)", "SHD-2K", "SHD-5M", "SHD-GD",
-	"WVR-6K", "WVR-6K(C)", "WVR-6R", "WVR-6R(P)", "WVR-7D(L)", "WVR-7K", "WVR-Q",
-	"IFR-A", "IFR-B", "IFR-C", "IFR-D", "IFR-PRIME", "IFR-PRIME(I)",
-	"SHC-A", "SHC-B", "SHC-P", "SHC-PRIME", "SHC-PRIME(I)",
-	"HBK-IIC", "HBK-IIC(O)", "HBK-IIC-A", "HBK-IIC-B", "HBK-IIC-C",
-	"NVA-A", "NVA-B", "NVA-C", "NVA-D(L)", "NVA-PRIME", "NVA-PRIME(I)", "NVA-S",
-	"SCR-A", "SCR-B", "SCR-C", "SCR-D", "SCR-PRIME", "SCR-PRIME(I)", "SCR-PRIME(C)",
-	"DRG-1C", "DRG-1N", "DRG-5N", "DRG-5N(C)", "DRG-FANG", "DRG-FLAME",
-	"QKD-4G", "QKD-4G(C)", "QKD-4H", "QKD-5K", "QKD-IV4",
-	"CPLT-A1", "CPLT-A1(C)", "CPLT-C1", "CPLT-C1(F)", "CPLT-C4", "CPLT-J", "CPLT-K2",
-	"JM6-A", "JM6-A(C)", "JM6-DD", "JM6-FB", "JM6-S",
-	"TDR-5S", "TDR-5S(P)", "TDR-TD", "TDR-5SS", "TDR-9S", "TDR-9SE", "TDR-9SE(C)",
-	"CTF-0XP", "CTF-1X", "CTF-2X", "CTF-3D", "CTF-3D(C)", "CTF-4X", "CTF-IM",
-	"GHR-5H", "GHR-5J", "GHR-5J(R)", "GHR-5N", "GHR-5P",
-	"BL-6-KNT", "BL-6-KNT(R)", "BL-6B-KNT", "BL-7-KNT", "BL-7-KNT-L",
-	"MAD-3R", "MAD-5D", "MAD-5M", "MAD-BH2",
-	"ON1-K", "ON1-K(C)", "ON1-M", "ON1-P", "ON1-V", "ON1-VA",
-	"MDD-A", "MDD-B", "MDD-C", "MDD-PRIME", "MDD-PRIME(I)",
-	"EBJ-A", "EBJ-B", "EBJ-C", "EBJ-PRIME", "EBJ-PRIME(I)",
-	"HBR-A", "HBR-B", "HBR-PRIME", "HBR-PRIME(I)",
-	"SMN-B", "SMN-C", "SMN-D", "SMN-PRIME", "SMN-PRIME(I)",
-	"ON1-IIC", "ON1-IIC(O)", "ON1-IIC-A", "ON1-IIC-B", "ON1-IIC-C",
-	"TBR-A", "TBR-C", "TBR-C(C)", "TBR-D", "TBR-PRIME", "TBR-PRIME(I)", "TBR-S",
-	"AWS-8Q", "AWS-8R", "AWS-8T", "AWS-8V", "AWS-9M", "AWS-PB",
-	"VTR-9B", "VTR-9K", "VTR-9S", "VTR-9S(C)", "VTR-DS",
-	"ZEU-5S", "ZEU-6S", "ZEU-6S(R)", "ZEU-6T", "ZEU-9S", "ZEU-9S2(L)",
-	"BLR-1D", "BLR-1G", "BLR-1G(P)", "BLR-1GHE", "BLR-1S", "BLR-2C", "BLR-3M", "BLR-3C",
-	"STK-3F", "STK-3F(C)", "STK-3H", "STK-4N", "STK-5M", "STK-5S", "STK-M",
-	"HGN-732", "HGN-732B", "HGN-733", "HGN-733C", "HGN-733C(C)", "HGN-733P", "HGN-HM",
-	"MAL-1P", "MAL-1R", "MAL-1R(R)", "MAL-2P", "MAL-MX90",
-	"BNC-3E", "BNC-3M", "BNC-3M(C)", "BNC-3S", "BNC-LM",
-	"AS7-BH", "AS7-D", "AS7-D(F)", "AS7-D-DC", "AS7-K", "AS7-RS", "AS7-RS(C)", "AS7-S", "AS7-S(L)",
-	"KGC-000", "KGC-000(L)", "KGC-0000", "KGC-000B", "KGC-000B(C)",
-	"GAR-A", "GAR-B", "GAR-C", "GAR-D", "GAR-PRIME", "GAR-PRIME(I)",
-	"WHK-A", "WHK-B", "WHK-C", "WHK-PRIME", "WHK-PRIME(I)",
-	"HGN-IIC", "HGN-IIC-A", "HGN-IIC-B", "HGN-IIC-C",
-	"EXE-A", "EXE-B", "EXE-C(L)", "EXE-D", "EXE-PRIME", "EXE-PRIME(I)",
-	"DWF-A", "DWF-B", "DWF-PRIME", "DWF-PRIME(I)", "DWF-S", "DWF-W", "DWF-W(C)",
-)
+with open("basedata/mechs.txt") as f:
+	Mechs = [line.rstrip("\n") for line in f]
 
 def debug(txt):
 	if loglevel >= DEBUG:
@@ -226,9 +188,6 @@ def debug(txt):
 def log(txt):
 	if loglevel >= LOG:
 		print(YELLOW +	"[  LOG  ] " + txt + ENDC)
-
-def success(message):
-	print(GREEN +	"[SUCCESS] " + message + ENDC)
 
 def error(message):
 	print(RED +		"[ ERROR ] " + message + ENDC)
@@ -286,7 +245,7 @@ def preprocess(img, id, part):
 	enhancer = ImageEnhance.Sharpness(tmp)
 	tmp = enhancer.enhance(2.0)
 	# convert to grayscale
-	tmp = tmp.convert(mode="LA")
+	tmp = tmp.convert(mode="L")
 	# threshold greys to white
 	tmp = tmp.point(lambda p: p > 60 and 255)
 	#tmp.save("./intermediate/%s_part_%s.png" % (id, part))
@@ -306,7 +265,7 @@ def getmap(img, id, filename):
 	# if map already matches an entry in the list, success
 	for map in Maps:
 		if rawmap.lower() == map.lower():
-			success("Found Map: \"%s\" with distance=0" % map)
+			log("Found Map: \"%s\" with distance=0" % map)
 			return (0, map)
 	
 	dist = 100
@@ -327,7 +286,7 @@ def getmap(img, id, filename):
 		error("Could not determine map from input: \"%s\"" % rawmap)
 		dist = None
 	else:
-		success("Found Map: \"%s\" with distance=%s" % (correctmap, repr(dist)))
+		log("Found Map: \"%s\" with distance=%s" % (correctmap, repr(dist)))
 
 	if dist == None:
 		# Map could not be determined from input
@@ -354,13 +313,14 @@ def getmode(img, id, filename):
 		CONFIG.resinfo.mode.size.h
 	)
 	crop = img.crop((x, y, x+w, y+h))
-	#crop.save("./intermediate/%s_mode.png" % id)
+	crop.save("./intermediate/%s_mode.png" % id)
 	rawmode = pytesseract.image_to_string(crop, lang="eng", config="-psm 6")
 	log("Raw Mode: \"%s\"" % rawmode)
 	# if mode already matches an entry in the list, success
 	for mode in Modes:
 		if rawmode.lower() == mode.lower():
-			success("Found Mode: \"%s\" with distance=0" % mode)
+			mode.replace("Game Mode: ", "")		# workaround
+			log("Found Mode: \"%s\" with distance=0" % mode)
 			return (0, mode)
 	
 	dist = 100
@@ -381,13 +341,15 @@ def getmode(img, id, filename):
 		error("Could not determine mode from input: \"%s\"" % rawmode)
 		dist = None
 	else:
-		success("Found Mode: \"%s\" with distance=%s" % (correctmode, repr(dist)))
+		correctmode.replace("Game Mode: ", "")
+		log("Found Mode: \"%s\" with distance=%s" % (correctmode, repr(dist)))
 	
 	if dist == None:
 		# Mode could not be determined from input
 		# ask for user input
 		i = 0
 		for modename in Modes:
+			modename.replace("Game Mode: ", "")
 			print(repr(i+1) + ": " + modename)
 			i+=1
 		x = -1
@@ -395,7 +357,7 @@ def getmode(img, id, filename):
 		while x < 0 or x > len(Modes):
 			x = int(input("Enter mode number: "))
 			log("Mode entered: " + repr(x))
-		correctmode = Modes[x-1]
+		correctmode = Modes[x-1].replace("Game Mode: ", "")
 		dist = 0
 
 	return (dist, correctmode)
@@ -415,7 +377,7 @@ def gettime(img, id, filename):
 	while not isTimeFormat(rawtime):
 		error("Could not determine time from input: \"%s\"" % rawtime)
 		print("Check image for time: " + filename)
-		rawtime = raw_input("Enter time: ")
+		rawtime = input("Enter time: ")
 	
 	return correctTimeFormat(rawtime)
 
@@ -468,7 +430,7 @@ def getplayerdata(img, id, filename):
 			fratio = tmpratio
 		row += 1
 	
-	success("Found Player: \"%s\" (searched for \"%s\") with distance=%s" % (playerfound, CONFIG.playername, repr(dist)))
+	log("Found Player: \"%s\" (searched for \"%s\") with distance=%s" % (playerfound, CONFIG.playername, repr(dist)))
 	#crop.save("./intermediate/%s_player.png" % id)
 
 	result = None
@@ -528,31 +490,33 @@ def getplayerdata(img, id, filename):
 		if dist > len(rawmech)*0.6 and fjaro < 0.5 and fratio < 0.5:
 			debug("Quality of found mech not good enough.")
 		else:
-			mechfound = True
-		
-		if not mechfound or dist >= 3:
-			error("Could not determine mech from input: \"%s\"" % rawmech)
-			print("Check image for mech: " + filename)
-			# Mech could not be determined from input
-			# ask for user input
-			i = 0
-			print(repr(0) + ": manual")
-			for mechname in possiblemechs:
-				print(repr(i+1) + ": " + mechname)
-				i+=1
-			x = -1
-			print("Check image for mech: " + filename)
-			while x < 0 or x > len(possiblemechs):
-				x = int(input("Enter mech number: "))
-				log("Mech entered: " + repr(x))
-			if x == 0:
-				correctmech = raw_input("Enter mech name: ")
-			else:
-				correctmech = possiblemechs[x-1]
+			if jaro_mech == ratio_mech and jaro_mech == dist_mech:
+				mechfound = True
+				correctmech = jaro_mech
+
+	if not mechfound:
+		error("Could not determine mech from input: \"%s\"" % rawmech)
+		print("Check image for mech: " + filename)
+		# Mech could not be determined from input
+		# ask for user input
+		i = 0
+		print(repr(0) + ": manual")
+		for mechname in possiblemechs:
+			print(repr(i+1) + ": " + mechname)
+			i+=1
+		x = -1
+		print("Check image for mech: " + filename)
+		while x < 0 or x > len(possiblemechs):
+			x = int(input("Enter mech number: "))
+			log("Mech entered: " + repr(x))
+		if x == 0:
+			correctmech = input("Enter mech name: ")
+		else:
+			correctmech = possiblemechs[x-1]
 
 	# remove brackets in mechname (e.g. (C), (I), (S) and so on)
-	correctmech = re.sub(r"\(.\)", "", correctmech)
-	success("Found Mech: \"%s\" with distance=%s" % (correctmech, repr(dist)))
+	#correctmech = re.sub(r"\(.\)", "", correctmech)
+	log("Found Mech: \"%s\" with distance=%s" % (correctmech, repr(dist)))
 	
 	cropstatus = crop.crop((CONFIG.resinfo.status.x, 0, CONFIG.resinfo.status.x + CONFIG.resinfo.status.w, h))
 	rawstatus = pytesseract.image_to_string(cropstatus, lang="eng", config="-psm 6")
@@ -644,7 +608,9 @@ def getxp(img, id, filename):
 
 	return xp
 
-def checkpixelcolor((r1,g1,b1), (r2, g2, b2), factor):
+def checkpixelcolor(pixel1, pixel2, factor):
+	r1, g1, b1 = pixel1
+	r2, g2, b2 = pixel2
 	if r1 >= r2-255*factor and r1 <= r2+255*factor and \
 		g1 >= g2-255*factor and g1 <= g2+255*factor and \
 		b1 >= b2-255*factor and b1 <= b2+255*factor:
@@ -682,7 +648,52 @@ def getpsr(img, id, filename):
 			log("PSR entered: " + repr(x))
 		return PSR[x-1]
 
-def main():
+def usage():
+	print("Usage: python analyze.py\n")
+	print("    -p|--player=\"PLAYERNAME\"")
+	print("    -r|--resolution=\"<1920x1200>\"")
+	print("    [-h|--help]")
+	print("    [-v|--verbose]")
+
+def processArgs(argv):
+	global CONFIG
+	try:
+		opts, args = getopt.getopt(argv, "p:r:t:vh", ["player=", "resolution=", "type=", "verbose", "help"])
+	except getopt.GetoptError as err:
+		usage()
+		abort(repr(err))
+
+	log("ARGS: " + repr(opts))
+	
+	for opt, arg in opts:
+		if opt in ("-h", "--help"):
+			usage()
+			exit(0)
+		elif opt in ("-p", "--player"):
+			log("player=" + arg)
+			target = arg
+		elif opt in ("-p", "--parts"):
+			log("parts=" + arg)
+			if "all" in arg:
+				arg = "bootstrap uboot env kernel rootfs"
+			parts = string.split(arg)
+		elif opt in ("-v", "--verbose"):
+			log("verbose=True")
+			verbose = True
+	if not target:
+		usage()
+		abort("Architecture not given")
+	if not parts:
+		usage()
+		abort("At least one part must be given")
+	if target not in ("Matrix504", "Matrix505", "SEC2", "SEC3"):
+		usage()
+		abort("Invalid target given: " + repr(target))
+	initArch()
+
+def main(args):
+	processArgs(args)
+	# read config files
 	files = [f for f in listdir("./input") if isfile(join("./input", f))]
 	files.sort()
 	files.reverse()
@@ -733,7 +744,7 @@ def main():
 
 		print
 
-	success("Finished")
+	log("Finished")
 	return
 	
 if __name__ == "__main__":
