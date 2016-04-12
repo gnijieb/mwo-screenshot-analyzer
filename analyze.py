@@ -18,220 +18,57 @@
 
 from collections import namedtuple
 from subprocess import call
-
-# https://pypi.python.org/pypi/python-Levenshtein/0.12.0
-# require package: python-dev, python-pip
-# sudo pip install 'python-Levenshtein'
-from Levenshtein import *
-
-# https://pypi.python.org/pypi/pytesseract
-# require package: python-imaging, tesseract-ocr
-# sudo pip install 'pytesseract'
-#try:
-#	import Image, ImageFilter
-#	print("Image imported")
-#except ImportError:
-from PIL import Image, ImageFilter, ImageOps, ImageEnhance
-#	print("PIL Image imported")
-
-import pytesseract
-
+import sys
 import re
 import string
-import shutil
 from os import listdir
 from os.path import isfile, join
 import shutil
 import time
+import ConfigParser
+import getopt
+
+from Levenshtein import *
+from PIL import Image, ImageFilter, ImageOps, ImageEnhance
+import pytesseract
 
 DEBUG = 2
 LOG   = 1
-loglevel = LOG
-
-RED    = "\033[91;1m"
-GREEN  = "\033[92;1m"
-YELLOW = "\033[93;1m"
-ENDC   = "\033[0m"
 
 class Configuration:
 	player = None
+	type = None
 	resinfo = None
 	fnpattern = None
 	dtformat = None
+	loglevel = LOG
 	
-OffsetT = namedtuple("Offset", "x y")
-SizeT = namedtuple("Size", "w h")
-AreaT = namedtuple("Area", "offset size")
-EntryT = namedtuple("Entry", "x, w")	# the x offset and width of e.g. playername in cropped entry
-ImageT = namedtuple("Image", "resolution psr psrup psrdown psrnone map mode time result entrysize entryposx entryposy player mech status score kills assists damage cbills xp")
-
-Image1920x1200 = ImageT("1920x1200",    # resolution
-		OffsetT(1092, 677),		# psr pixel and corresponding color values for up/down/equal
-		(168, 214, 96),			# psr up color (r,g,b)
-		(255, 44, 44),			# psr down color (r,g,b)
-		(255, 255, 0),			# psr none color (r,g,b)
-        AreaT(OffsetT(845, 80), SizeT(252, 35)),         # map
-        AreaT(OffsetT(1239, 80), SizeT(106, 35)),        # mode
-        AreaT(OffsetT(1560, 80), SizeT(68, 35)),         # time
-        AreaT(OffsetT(835, 165), SizeT(235, 45)),        # result
-        SizeT(877, 23),                  # entry size
-        650,                            # entry pos x
-        [                               # entry pos y list
-        240,         # entry 0
-        266,         # entry 1
-        292,         # entry 2
-        318,         # entry 3
-
-        350,         # entry 4
-        376,         # entry 5
-        402,         # entry 6
-        428,         # entry 7
-
-        461,         # entry 8
-        487,         # entry 9
-        512,         # entry 10
-        537,         # entry 11
-
-        576,         # entry 12
-        603,         # entry 13
-        629,         # entry 14
-        655,         # entry 15
-
-        687,         # entry 16
-        712,         # entry 17
-        738,         # entry 18
-        764,         # entry 19
-
-        798,         # entry 20
-        823,         # entry 21
-        849,         # entry 22
-        874,         # entry 23
-        ],
-		EntryT(73, 240),		# player
-		EntryT(315, 140),		# mech
-		EntryT(457, 50),		# status (alive/dead)
-		EntryT(595, 45),		# matchscore
-		EntryT(692, 25),		# kills
-		EntryT(757, 25),		# assists
-		EntryT(827, 49),		# damage
-		AreaT(OffsetT(350, 295), SizeT(300, 100)),		# cbills
-		AreaT(OffsetT(1270, 295), SizeT(250, 100)),		# xp
-        )
+EntryT = namedtuple("Entry", "x1 x2")	# the x1 offset (from) and x2 offset (to) of e.g. playername in cropped entry
+PixelT = namedtuple("Pixel", "x y")
+ColorT = namedtuple("Color", "r g b")
+RectangleT = namedtuple("Rectangle", "x1 y1 x2 y2")
+ImageT = namedtuple("Image", "resolution psr psrup psrdown psrnone map mode time result rowx1 rowx2 rowheight rows player mech status score kills assists damage cbills xp")
 
 CONFIG = Configuration()
-CONFIG.playername = "Beijing"
-CONFIG.resinfo = Image1920x1200
 CONFIG.fnpattern = r"\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}" # FRAPS Screenshot filename datetime pattern
 #CONFIG.fnpattern = r"\d{2}\.\d{2}\.\d{4}-\d{2}\.\d{2}\.\d{2}" # MWO Screenshot filename datetime pattern
 CONFIG.dtformat = "%Y-%m-%d %H-%M-%S" # FRAPS Screenshot filename datetime format
 #CONFIG.dtformat = "%m.%d.%Y-%H.%M.%S" # MWO Screenshot filename datetime format
 
-Maps = (
-	"Alpine Peaks",
-	"Canyon Network",
-	"Caustic Valley",
-	"Crimson Strait",
-	"Forest Colony",
-	"Frozen City",
-	"Frozen City Night",
-	"HPG Manifold",
-	"The Mining Collective",
-	"River City",
-	"Terra Therma",
-	"Tourmaline Desert",
-	"Viridian Bog"
-)
-
-Modes = (
-	"Assault",
-	"Conquest",
-	"Skirmish"
-)
-
-PSR = (
-	"Up",
-	"Down",
-	"None"
-)
-
-Mechs = (
-	"LCT-1E", "LCT-1M", "LCT-1V", "LCT-1V(P)", "LCT-3M", "LCT-3S", "LCT-3V", "LCT-PB",
-	"COM-1B", "COM-1D", "COM-2D", "COM-3A", "COM-TDK",
-	"SDR-5D", "SDR-5K", "SDR-5K(C)", "SDR-5V", "SDR-A",
-	"UM-R60", "UM-R60L", "UM-R63", "UM-R63(S)",
-	"FS9-A", "FS9-E", "FS9-H", "FS9-K", "FS9-S", "FS9-S(C)",
-	"JR7-D", "JR7-D(F)", "JR7-D(S)", "JR7-F", "JR7-F(C)", "JR7-K", "JR7-O",
-	"PNT-10K", "PNT-10K(R)", "PNT-10P", "PNT-8Z", "PNT-9R",
-	"RVN-2X", "RVN-3L", "RVN-3L(C)", "RVN-4X", "RVN-H",
-	"WLF-1", "WLF-1A", "WLF-1B", "WLF-2", "WLF-2(R)",
-	"MLX-A", "MLX-B", "MLX-C", "MLX-D", "MLX-PRIME", "MLX-PRIME(I)",
-	"ACH-A", "ACH-B", "ACH-C", "ACH-PRIME", "ACH-PRIME(C)", "ACH-PRIME(I)",
-	"KFX-C", "KFX-D", "KFX-PRIME", "KFX-PRIME(I)", "KFX-S",
-	"ADR-A", "ADR-B", "ADR-D", "ADR-PRIME", "ADR-PRIME(I)",
-	"JR7-IIC", "JR7-IIC(O)", "JR7-IIC-2", "JR7-IIC-3", "JR7-IIC-A",
-	"CDA-2A", "CDA-2A(C)", "CDA-2B", "CDA-3C", "CDA-3F(L)", "CDA-3M", "CDA-X5",
-	"BJ-1", "BJ-1(C)", "BJ-1DC", "BJ-1X", "BJ-3", "BJ-A",
-	"VND-1AA", "VND-1R", "VND-1SIB", "VND-1X",
-	"CN9-A", "CN9-A(C)", "CN9-AH", "CN9-AH(L)", "CN9-AL", "CN9-D", "CN9-YLW",
-	"CRB-20", "CRB-27", "CRB-27(R)", "CRB-27B", "CRB-27SL",
-	"ENF-4P", "ENF-4R", "ENF-4R(C)", "ENF-5D", "ENF-5D(R)", "ENF-5P",
-	"HBK-4G", "HBK-4G(F)", "HBK-4H", "HBK-4J", "HBK-4P", "HBK-4P(C)", "HBK-4SP", "HBK-GI",
-	"TBT-3C", "TBT-5J", "TBT-5N", "TBT-7K", "TBT-7M", "TBT-7M(C)", "TBT-LG",
-	"GRF-1E", "GRF-1N", "GRF-1N(P)", "GRF-1S", "GRF-1S(C)", "GRF-2N", "GRF-3M",
-	"KTO-18", "KTO-18(C)", "KTO-19", "KTO-20", "KTO-GB",
-	"SHD-2D", "SHD-2D2", "SHD-2H", "SHD-2H(P)", "SHD-2H(C)", "SHD-2K", "SHD-5M", "SHD-GD",
-	"WVR-6K", "WVR-6K(C)", "WVR-6R", "WVR-6R(P)", "WVR-7D(L)", "WVR-7K", "WVR-Q",
-	"IFR-A", "IFR-B", "IFR-C", "IFR-D", "IFR-PRIME", "IFR-PRIME(I)",
-	"SHC-A", "SHC-B", "SHC-P", "SHC-PRIME", "SHC-PRIME(I)",
-	"HBK-IIC", "HBK-IIC(O)", "HBK-IIC-A", "HBK-IIC-B", "HBK-IIC-C",
-	"NVA-A", "NVA-B", "NVA-C", "NVA-D(L)", "NVA-PRIME", "NVA-PRIME(I)", "NVA-S",
-	"SCR-A", "SCR-B", "SCR-C", "SCR-D", "SCR-PRIME", "SCR-PRIME(I)", "SCR-PRIME(C)",
-	"DRG-1C", "DRG-1N", "DRG-5N", "DRG-5N(C)", "DRG-FANG", "DRG-FLAME",
-	"QKD-4G", "QKD-4G(C)", "QKD-4H", "QKD-5K", "QKD-IV4",
-	"CPLT-A1", "CPLT-A1(C)", "CPLT-C1", "CPLT-C1(F)", "CPLT-C4", "CPLT-J", "CPLT-K2",
-	"JM6-A", "JM6-A(C)", "JM6-DD", "JM6-FB", "JM6-S",
-	"TDR-5S", "TDR-5S(P)", "TDR-TD", "TDR-5SS", "TDR-9S", "TDR-9SE", "TDR-9SE(C)",
-	"CTF-0XP", "CTF-1X", "CTF-2X", "CTF-3D", "CTF-3D(C)", "CTF-4X", "CTF-IM",
-	"GHR-5H", "GHR-5J", "GHR-5J(R)", "GHR-5N", "GHR-5P",
-	"BL-6-KNT", "BL-6-KNT(R)", "BL-6B-KNT", "BL-7-KNT", "BL-7-KNT-L",
-	"MAD-3R", "MAD-5D", "MAD-5M", "MAD-BH2",
-	"ON1-K", "ON1-K(C)", "ON1-M", "ON1-P", "ON1-V", "ON1-VA",
-	"MDD-A", "MDD-B", "MDD-C", "MDD-PRIME", "MDD-PRIME(I)",
-	"EBJ-A", "EBJ-B", "EBJ-C", "EBJ-PRIME", "EBJ-PRIME(I)",
-	"HBR-A", "HBR-B", "HBR-PRIME", "HBR-PRIME(I)",
-	"SMN-B", "SMN-C", "SMN-D", "SMN-PRIME", "SMN-PRIME(I)",
-	"ON1-IIC", "ON1-IIC(O)", "ON1-IIC-A", "ON1-IIC-B", "ON1-IIC-C",
-	"TBR-A", "TBR-C", "TBR-C(C)", "TBR-D", "TBR-PRIME", "TBR-PRIME(I)", "TBR-S",
-	"AWS-8Q", "AWS-8R", "AWS-8T", "AWS-8V", "AWS-9M", "AWS-PB",
-	"VTR-9B", "VTR-9K", "VTR-9S", "VTR-9S(C)", "VTR-DS",
-	"ZEU-5S", "ZEU-6S", "ZEU-6S(R)", "ZEU-6T", "ZEU-9S", "ZEU-9S2(L)",
-	"BLR-1D", "BLR-1G", "BLR-1G(P)", "BLR-1GHE", "BLR-1S", "BLR-2C", "BLR-3M", "BLR-3C",
-	"STK-3F", "STK-3F(C)", "STK-3H", "STK-4N", "STK-5M", "STK-5S", "STK-M",
-	"HGN-732", "HGN-732B", "HGN-733", "HGN-733C", "HGN-733C(C)", "HGN-733P", "HGN-HM",
-	"MAL-1P", "MAL-1R", "MAL-1R(R)", "MAL-2P", "MAL-MX90",
-	"BNC-3E", "BNC-3M", "BNC-3M(C)", "BNC-3S", "BNC-LM",
-	"AS7-BH", "AS7-D", "AS7-D(F)", "AS7-D-DC", "AS7-K", "AS7-RS", "AS7-RS(C)", "AS7-S", "AS7-S(L)",
-	"KGC-000", "KGC-000(L)", "KGC-0000", "KGC-000B", "KGC-000B(C)",
-	"GAR-A", "GAR-B", "GAR-C", "GAR-D", "GAR-PRIME", "GAR-PRIME(I)",
-	"WHK-A", "WHK-B", "WHK-C", "WHK-PRIME", "WHK-PRIME(I)",
-	"HGN-IIC", "HGN-IIC-A", "HGN-IIC-B", "HGN-IIC-C",
-	"EXE-A", "EXE-B", "EXE-C(L)", "EXE-D", "EXE-PRIME", "EXE-PRIME(I)",
-	"DWF-A", "DWF-B", "DWF-PRIME", "DWF-PRIME(I)", "DWF-S", "DWF-W", "DWF-W(C)",
-)
+def abort(message, code = 1):
+	error("Aborting: " + message)
+	exit(code)
 
 def debug(txt):
-	if loglevel >= DEBUG:
-		print(YELLOW +	"[ DEBUG ] " + txt + ENDC)
+	if CONFIG.loglevel >= DEBUG:
+		print("[ DEBUG ] " + txt)
 
 def log(txt):
-	if loglevel >= LOG:
-		print(YELLOW +	"[  LOG  ] " + txt + ENDC)
-
-def success(message):
-	print(GREEN +	"[SUCCESS] " + message + ENDC)
+	if CONFIG.loglevel >= LOG:
+		print("[  LOG  ] " + txt)
 
 def error(message):
-	print(RED +		"[ ERROR ] " + message + ENDC)
+	print("[ ERROR ] " + message)
 
 def testlev(str1, str2):
 	debug("Testing '" + str1 + "' against '" + str2 + "'")
@@ -286,27 +123,27 @@ def preprocess(img, id, part):
 	enhancer = ImageEnhance.Sharpness(tmp)
 	tmp = enhancer.enhance(2.0)
 	# convert to grayscale
-	tmp = tmp.convert(mode="LA")
+	tmp = tmp.convert(mode="L")
 	# threshold greys to white
 	tmp = tmp.point(lambda p: p > 60 and 255)
 	#tmp.save("./intermediate/%s_part_%s.png" % (id, part))
 	return tmp
 
 def getmap(img, id, filename):
-	(x, y, w, h) = (
-		CONFIG.resinfo.map.offset.x,
-		CONFIG.resinfo.map.offset.y,
-		CONFIG.resinfo.map.size.w,
-		CONFIG.resinfo.map.size.h
+	(x1, y1, x2, y2) = (
+		CONFIG.resinfo.map.x1,
+		CONFIG.resinfo.map.y1,
+		CONFIG.resinfo.map.x2,
+		CONFIG.resinfo.map.y2
 	)
-	crop = img.crop((x, y, x+w, y+h))
+	crop = img.crop((x1, y1, x2, y2))
 	#crop.save("./intermediate/%s_map.png" % id)
 	rawmap = pytesseract.image_to_string(crop, lang="eng", config="-psm 6")
 	log("Raw Map: \"%s\" len=%s" % (rawmap, repr(len(rawmap))))
 	# if map already matches an entry in the list, success
 	for map in Maps:
 		if rawmap.lower() == map.lower():
-			success("Found Map: \"%s\" with distance=0" % map)
+			log("Found Map: \"%s\" with distance=0" % map)
 			return (0, map)
 	
 	dist = 100
@@ -327,7 +164,7 @@ def getmap(img, id, filename):
 		error("Could not determine map from input: \"%s\"" % rawmap)
 		dist = None
 	else:
-		success("Found Map: \"%s\" with distance=%s" % (correctmap, repr(dist)))
+		log("Found Map: \"%s\" with distance=%s" % (correctmap, repr(dist)))
 
 	if dist == None:
 		# Map could not be determined from input
@@ -347,20 +184,21 @@ def getmap(img, id, filename):
 	return (dist, correctmap)
 
 def getmode(img, id, filename):
-	(x, y, w, h) = (
-		CONFIG.resinfo.mode.offset.x,
-		CONFIG.resinfo.mode.offset.y,
-		CONFIG.resinfo.mode.size.w,
-		CONFIG.resinfo.mode.size.h
+	(x1, y1, x2, y2) = (
+		CONFIG.resinfo.mode.x1,
+		CONFIG.resinfo.mode.y1,
+		CONFIG.resinfo.mode.x2,
+		CONFIG.resinfo.mode.y2
 	)
-	crop = img.crop((x, y, x+w, y+h))
+	crop = img.crop((x1, y1, x2, y2))
 	#crop.save("./intermediate/%s_mode.png" % id)
 	rawmode = pytesseract.image_to_string(crop, lang="eng", config="-psm 6")
 	log("Raw Mode: \"%s\"" % rawmode)
 	# if mode already matches an entry in the list, success
 	for mode in Modes:
 		if rawmode.lower() == mode.lower():
-			success("Found Mode: \"%s\" with distance=0" % mode)
+			mode.replace("Game Mode: ", "")		# workaround
+			log("Found Mode: \"%s\" with distance=0" % mode)
 			return (0, mode)
 	
 	dist = 100
@@ -381,13 +219,15 @@ def getmode(img, id, filename):
 		error("Could not determine mode from input: \"%s\"" % rawmode)
 		dist = None
 	else:
-		success("Found Mode: \"%s\" with distance=%s" % (correctmode, repr(dist)))
+		correctmode.replace("Game Mode: ", "")
+		log("Found Mode: \"%s\" with distance=%s" % (correctmode, repr(dist)))
 	
 	if dist == None:
 		# Mode could not be determined from input
 		# ask for user input
 		i = 0
 		for modename in Modes:
+			modename.replace("Game Mode: ", "")
 			print(repr(i+1) + ": " + modename)
 			i+=1
 		x = -1
@@ -395,19 +235,19 @@ def getmode(img, id, filename):
 		while x < 0 or x > len(Modes):
 			x = int(input("Enter mode number: "))
 			log("Mode entered: " + repr(x))
-		correctmode = Modes[x-1]
+		correctmode = Modes[x-1].replace("Game Mode: ", "")
 		dist = 0
 
 	return (dist, correctmode)
 
 def gettime(img, id, filename):
-	(x, y, w, h) = (
-		CONFIG.resinfo.time.offset.x,
-		CONFIG.resinfo.time.offset.y,
-		CONFIG.resinfo.time.size.w,
-		CONFIG.resinfo.time.size.h
+	(x1, y1, x2, y2) = (
+		CONFIG.resinfo.time.x1,
+		CONFIG.resinfo.time.y1,
+		CONFIG.resinfo.time.x2,
+		CONFIG.resinfo.time.y2
 	)
-	crop = img.crop((x, y, x+w, y+h))
+	crop = img.crop((x1, y1, x2, y2))
 	#crop.save("./intermediate/%s_time.png" % id)
 	rawtime = pytesseract.image_to_string(crop, lang="eng", config="-psm 6")
 	log("Raw Time: \"%s\"" % rawtime)
@@ -415,17 +255,18 @@ def gettime(img, id, filename):
 	while not isTimeFormat(rawtime):
 		error("Could not determine time from input: \"%s\"" % rawtime)
 		print("Check image for time: " + filename)
-		rawtime = raw_input("Enter time: ")
+		rawtime = input("Enter time: ")
 	
 	return correctTimeFormat(rawtime)
 
 def getplayerdata(img, id, filename):
 	row = 0
-	y = 0
-	(x, w, h) =  (
-		CONFIG.resinfo.entryposx,
-		CONFIG.resinfo.entrysize.w,
-		CONFIG.resinfo.entrysize.h
+	y1 = 0
+	y2 = 0
+	(x1, x2, h) =  (
+		CONFIG.resinfo.rowx1,
+		CONFIG.resinfo.rowx2,
+		CONFIG.resinfo.rowheight
 	)
 	crop = None
 	playerfound = None
@@ -434,19 +275,21 @@ def getplayerdata(img, id, filename):
 	fjaro = 0.0
 	fratio = 0.0
 	while row < 24:
-		y = CONFIG.resinfo.entryposy[row]
-		crop = img.crop((x, y, x+w, y+h))
+		y1 = CONFIG.resinfo.rows[row]
+		y2 = y1 + h
+		crop = img.crop((x1, y1, x2, y2))
 		#debug("crop: " + repr(crop.size))
 		#crop.load()
 		#crop.save("./intermediate/%s_entry_%s.png" % (id, repr(row)))
 		
-		cropplayer = crop.crop((CONFIG.resinfo.player.x, 0, CONFIG.resinfo.player.w, h))
+		#cropplayer = crop.crop((CONFIG.resinfo.player.x1, 0, CONFIG.resinfo.player.x2, h))
+		cropplayer = img.crop((CONFIG.resinfo.player.x1, y1, CONFIG.resinfo.player.x2, y2))
 		#cropplayer.load()
 		rawplayer = pytesseract.image_to_string(cropplayer, lang="eng", config="-psm 6")
 		#debug("Raw Player: \"%s\"" % rawplayer)
 
 		# if playername already matches, success
-		if rawplayer.lower() == CONFIG.playername.lower():
+		if rawplayer.lower() == CONFIG.player.lower():
 			playerfound = rawplayer
 			selectedrow = row
 			dist = 0
@@ -454,10 +297,10 @@ def getplayerdata(img, id, filename):
 			fratio = 1.0
 			break
 
-		#testlev(CONFIG.playername.lower(), rawplayer.lower())
-		tmpdist = distance(CONFIG.playername.lower(), rawplayer.lower())
-		tmpjaro = jaro(CONFIG.playername.lower(), rawplayer.lower())
-		tmpratio = ratio(CONFIG.playername.lower(), rawplayer.lower())
+		#testlev(CONFIG.player.lower(), rawplayer.lower())
+		tmpdist = distance(CONFIG.player.lower(), rawplayer.lower())
+		tmpjaro = jaro(CONFIG.player.lower(), rawplayer.lower())
+		tmpratio = ratio(CONFIG.player.lower(), rawplayer.lower())
 		
 		# check the quality of the found string
 		if tmpdist <= dist and (tmpjaro >= 0.5 or tmpratio >= 0.5):
@@ -468,8 +311,8 @@ def getplayerdata(img, id, filename):
 			fratio = tmpratio
 		row += 1
 	
-	success("Found Player: \"%s\" (searched for \"%s\") with distance=%s" % (playerfound, CONFIG.playername, repr(dist)))
-	#crop.save("./intermediate/%s_player.png" % id)
+	log("Found Player: \"%s\" (searched for \"%s\") with distance=%s" % (playerfound, CONFIG.player, repr(dist)))
+	crop.save("./intermediate/%s_player.png" % id)
 
 	result = None
 	if selectedrow < 12:
@@ -478,7 +321,8 @@ def getplayerdata(img, id, filename):
 		result = "Defeat"
 
 	# get the data from selected entry row
-	cropmech = crop.crop((CONFIG.resinfo.mech.x, 0, CONFIG.resinfo.mech.x + CONFIG.resinfo.mech.w, h))
+	#cropmech = crop.crop((CONFIG.resinfo.mech.x1, y, CONFIG.resinfo.mech.x2, y+h))
+	cropmech = img.crop((CONFIG.resinfo.mech.x1, y1, CONFIG.resinfo.mech.x2, y2))
 	rawmech = pytesseract.image_to_string(cropmech, lang="eng", config="-psm 6")
 	debug("Raw mech: \"%s\"" % rawmech)
 	mechfound = False
@@ -516,7 +360,7 @@ def getplayerdata(img, id, filename):
 				correctmech = mechname
 		
 			# build list of possible matches
-			if tmp_jaro >= 0.5 and tmp_ratio >= 0.5:
+			if tmp_jaro >= 0.55 and tmp_ratio >= 0.55:
 				possiblemechs.append(mechname)
 				debug("Possible jaro/ratio match: %s (%4.4f, %4.4f)" % (mechname, tmp_jaro, tmp_ratio))
 
@@ -528,33 +372,39 @@ def getplayerdata(img, id, filename):
 		if dist > len(rawmech)*0.6 and fjaro < 0.5 and fratio < 0.5:
 			debug("Quality of found mech not good enough.")
 		else:
-			mechfound = True
-		
-		if not mechfound or dist >= 3:
-			error("Could not determine mech from input: \"%s\"" % rawmech)
-			print("Check image for mech: " + filename)
-			# Mech could not be determined from input
-			# ask for user input
-			i = 0
-			print(repr(0) + ": manual")
-			for mechname in possiblemechs:
-				print(repr(i+1) + ": " + mechname)
-				i+=1
-			x = -1
-			print("Check image for mech: " + filename)
-			while x < 0 or x > len(possiblemechs):
-				x = int(input("Enter mech number: "))
-				log("Mech entered: " + repr(x))
-			if x == 0:
-				correctmech = raw_input("Enter mech name: ")
-			else:
-				correctmech = possiblemechs[x-1]
+			if dist_mech == jaro_mech and jaro_mech == ratio_mech and fjaro >= 0.9 and fratio >= 0.9:
+				mechfound = True
+				correctmech = dist_mech
+			elif jaro_mech == ratio_mech and fjaro >= 0.8 and fratio >= 0.8:
+				mechfound = True
+				correctmech = jaro_mech
+
+	if not mechfound:
+		error("Could not determine mech from input: \"%s\"" % rawmech)
+		print("Check image for mech: " + filename)
+		# Mech could not be determined from input
+		# ask for user input
+		i = 0
+		print(repr(0) + ": manual")
+		for mechname in possiblemechs:
+			print(repr(i+1) + ": " + mechname)
+			i+=1
+		x = -1
+		print("Check image for mech: " + filename)
+		while x < 0 or x > len(possiblemechs):
+			x = int(input("Enter mech number: "))
+			log("Mech entered: " + repr(x))
+		if x == 0:
+			correctmech = input("Enter mech name: ")
+		else:
+			correctmech = possiblemechs[x-1]
 
 	# remove brackets in mechname (e.g. (C), (I), (S) and so on)
-	correctmech = re.sub(r"\(.\)", "", correctmech)
-	success("Found Mech: \"%s\" with distance=%s" % (correctmech, repr(dist)))
+	#correctmech = re.sub(r"\(.\)", "", correctmech)
+	log("Found Mech: \"%s\" with distance=%s" % (correctmech, repr(dist)))
 	
-	cropstatus = crop.crop((CONFIG.resinfo.status.x, 0, CONFIG.resinfo.status.x + CONFIG.resinfo.status.w, h))
+	#cropstatus = crop.crop((CONFIG.resinfo.status.x, 0, CONFIG.resinfo.status.x + CONFIG.resinfo.status.w, h))
+	cropstatus = img.crop((CONFIG.resinfo.status.x1, y1, CONFIG.resinfo.status.x2, y2))
 	rawstatus = pytesseract.image_to_string(cropstatus, lang="eng", config="-psm 6")
 	dist = distance("alive", rawstatus.lower())
 	status = 0
@@ -562,7 +412,8 @@ def getplayerdata(img, id, filename):
 		# dead
 		status = 1
 	
-	cropscore = crop.crop((CONFIG.resinfo.score.x, 0, CONFIG.resinfo.score.x + CONFIG.resinfo.score.w, h))
+	#cropscore = crop.crop((CONFIG.resinfo.score.x, 0, CONFIG.resinfo.score.x + CONFIG.resinfo.score.w, h))
+	cropscore = img.crop((CONFIG.resinfo.score.x1, y1, CONFIG.resinfo.score.x2, y2))
 	rawscore = pytesseract.image_to_string(cropscore, lang="eng", config="-psm 6")
 	try:
 		score = int(rawscore)
@@ -571,7 +422,8 @@ def getplayerdata(img, id, filename):
 		print("Check image for match score: " + filename)
 		score = int(input("Enter match score: "))
 
-	cropkills = crop.crop((CONFIG.resinfo.kills.x, 0, CONFIG.resinfo.kills.x + CONFIG.resinfo.kills.w, h))
+	#cropkills = crop.crop((CONFIG.resinfo.kills.x, 0, CONFIG.resinfo.kills.x + CONFIG.resinfo.kills.w, h))
+	cropkills = img.crop((CONFIG.resinfo.kills.x1, y1, CONFIG.resinfo.kills.x2, y2))
 	rawkills = pytesseract.image_to_string(cropkills, lang="eng", config="-psm 6")
 	try:
 		kills = int(rawkills)
@@ -580,7 +432,8 @@ def getplayerdata(img, id, filename):
 		print("Check image for kills: " + filename)
 		kills = int(input("Enter kills: "))
 
-	cropassists = crop.crop((CONFIG.resinfo.assists.x, 0, CONFIG.resinfo.assists.x + CONFIG.resinfo.assists.w, h))
+	#cropassists = crop.crop((CONFIG.resinfo.assists.x, 0, CONFIG.resinfo.assists.x + CONFIG.resinfo.assists.w, h))
+	cropassists = img.crop((CONFIG.resinfo.assists.x1, y1, CONFIG.resinfo.assists.x2, y2))
 	rawassists = pytesseract.image_to_string(cropassists, lang="eng", config="-psm 6")
 	try:
 		assists = int(rawassists)
@@ -589,7 +442,8 @@ def getplayerdata(img, id, filename):
 		print("Check image for assists: " + filename)
 		assists = int(input("Enter assists: "))
 
-	cropdamage = crop.crop((CONFIG.resinfo.damage.x, 0, CONFIG.resinfo.damage.x + CONFIG.resinfo.damage.w, h))
+	#cropdamage = crop.crop((CONFIG.resinfo.damage.x, 0, CONFIG.resinfo.damage.x + CONFIG.resinfo.damage.w, h))
+	cropdamage = img.crop((CONFIG.resinfo.damage.x1, y1, CONFIG.resinfo.damage.x2, y2))
 	rawdamage = pytesseract.image_to_string(cropdamage, lang="eng", config="-psm 6")
 	try:
 		damage = int(rawdamage)
@@ -601,14 +455,14 @@ def getplayerdata(img, id, filename):
 	return (result, correctmech, status, score, kills, assists, damage)
 
 def getcbills(img, id, filename):
-	(x, y, w, h) =  (
-		CONFIG.resinfo.cbills.offset.x,
-		CONFIG.resinfo.cbills.offset.y,
-		CONFIG.resinfo.cbills.size.w,
-		CONFIG.resinfo.cbills.size.h,
+	(x1, y1, x2, y2) =  (
+		CONFIG.resinfo.cbills.x1,
+		CONFIG.resinfo.cbills.y1,
+		CONFIG.resinfo.cbills.x2,
+		CONFIG.resinfo.cbills.y2,
 	)
-	crop = img.crop((x, y, x+w, y+h))
-	#crop.save("./intermediate/%s_cbills.png" % id)
+	crop = img.crop((x1, y1, x2, y2))
+	crop.save("./intermediate/%s_cbills.png" % id)
 	rawcbills = pytesseract.image_to_string(crop, lang="eng", config="-psm 6")
 	rawcbills = rawcbills.replace(",", "")
 	rawcbills = rawcbills.replace(" ", "")
@@ -623,14 +477,14 @@ def getcbills(img, id, filename):
 	return cbills
 
 def getxp(img, id, filename):
-	(x, y, w, h) =  (
-		CONFIG.resinfo.xp.offset.x,
-		CONFIG.resinfo.xp.offset.y,
-		CONFIG.resinfo.xp.size.w,
-		CONFIG.resinfo.xp.size.h,
+	(x1, y1, x2, y2) =  (
+		CONFIG.resinfo.xp.x1,
+		CONFIG.resinfo.xp.y1,
+		CONFIG.resinfo.xp.x2,
+		CONFIG.resinfo.xp.y2,
 	)
-	crop = img.crop((x, y, x+w, y+h))
-	#crop.save("./intermediate/%s_xp.png" % id)
+	crop = img.crop((x1, y1, x2, y2))
+	crop.save("./intermediate/%s_xp.png" % id)
 	rawxp = pytesseract.image_to_string(crop, lang="eng", config="-psm 6")
 	rawxp = rawxp.replace(",", "")
 	rawxp = rawxp.replace(" ", "")
@@ -644,7 +498,9 @@ def getxp(img, id, filename):
 
 	return xp
 
-def checkpixelcolor((r1,g1,b1), (r2, g2, b2), factor):
+def checkpixelcolor(pixel1, pixel2, factor):
+	r1, g1, b1 = pixel1
+	r2, g2, b2 = pixel2
 	if r1 >= r2-255*factor and r1 <= r2+255*factor and \
 		g1 >= g2-255*factor and g1 <= g2+255*factor and \
 		b1 >= b2-255*factor and b1 <= b2+255*factor:
@@ -682,7 +538,139 @@ def getpsr(img, id, filename):
 			log("PSR entered: " + repr(x))
 		return PSR[x-1]
 
-def main():
+def loadGameKnowledge():
+	global Maps, Modes, PSR, Mechs
+	
+	with open("basedata/maps.txt") as f:
+		Maps = [line.rstrip("\n") for line in f]
+
+	with open("basedata/gamemodes.txt") as f:
+		Modes = [line.rstrip("\n") for line in f]
+
+	with open("basedata/psr.txt") as f:
+		PSR = [line.rstrip("\n") for line in f]
+
+	with open("basedata/mechs.txt") as f:
+		Mechs = [line.rstrip("\n") for line in f]
+
+def loadResolutionInfo(res):
+	global CONFIG
+	width, height = res
+	resolution = repr(width) + "x" + repr(height)
+
+	p = ConfigParser.SafeConfigParser()
+	p.read("basedata/resolution_" + resolution + ".ini")
+	
+	print p.get("Info", "Resolution")
+	psrup = [int(val.strip()) for val in p.get("PSR", "up").split(" ")]
+	psrdown = [int(val.strip()) for val in p.get("PSR", "down").split(" ")]
+	psrnone = [int(val.strip()) for val in p.get("PSR", "none").split(" ")]
+
+	CONFIG.resinfo = ImageT(
+		resolution,
+		PixelT(int(p.get("PSR", "x")), int(p.get("PSR", "y"))),		# psr pixel and corresponding color values for up/down/equal
+		ColorT(psrup[0], psrup[1], psrup[2]),			# psr up color (r,g,b)
+		ColorT(psrdown[0], psrdown[1], psrdown[2]),		# psr down color (r,g,b)
+		ColorT(psrnone[0], psrnone[1], psrnone[2]),		# psr none color (r,g,b)
+		RectangleT(int(p.get("Map", "x1")), int(p.get("Map", "y1")), int(p.get("Map", "x2")), int(p.get("Map", "y2"))),
+		RectangleT(int(p.get("Mode", "x1")), int(p.get("Mode", "y1")), int(p.get("Mode", "x2")), int(p.get("Mode", "y2"))),
+		RectangleT(int(p.get("Time", "x1")), int(p.get("Time", "y1")), int(p.get("Time", "x2")), int(p.get("Time", "y2"))),
+		RectangleT(int(p.get("Result", "x1")), int(p.get("Result", "y1")), int(p.get("Result", "x2")), int(p.get("Result", "y2"))),
+		int(p.get("RowGeneral", "x1")),
+		int(p.get("RowGeneral", "x2")),
+		int(p.get("RowGeneral", "height")),
+		[
+			int(p.get("Row1", "y")), # entry row 1
+			int(p.get("Row2", "y")), # entry row 1
+			int(p.get("Row3", "y")), # entry row 1
+			int(p.get("Row4", "y")), # entry row 1
+			int(p.get("Row5", "y")), # entry row 1
+			int(p.get("Row6", "y")), # entry row 1
+			int(p.get("Row7", "y")), # entry row 1
+			int(p.get("Row8", "y")), # entry row 1
+			int(p.get("Row9", "y")), # entry row 1
+			int(p.get("Row10", "y")), # entry row 1
+			int(p.get("Row11", "y")), # entry row 1
+			int(p.get("Row12", "y")), # entry row 1
+			int(p.get("Row13", "y")), # entry row 1
+			int(p.get("Row14", "y")), # entry row 1
+			int(p.get("Row15", "y")), # entry row 1
+			int(p.get("Row16", "y")), # entry row 1
+			int(p.get("Row17", "y")), # entry row 1
+			int(p.get("Row18", "y")), # entry row 1
+			int(p.get("Row19", "y")), # entry row 1
+			int(p.get("Row20", "y")), # entry row 1
+			int(p.get("Row21", "y")), # entry row 1
+			int(p.get("Row22", "y")), # entry row 1
+			int(p.get("Row23", "y")), # entry row 1
+			int(p.get("Row24", "y"))# entry row 1
+		],
+		EntryT(int(p.get("Player", "x1")), int(p.get("Player", "x2"))),
+		EntryT(int(p.get("Mech", "x1")), int(p.get("Mech", "x2"))),
+		EntryT(int(p.get("Status", "x1")), int(p.get("Status", "x2"))),
+		EntryT(int(p.get("Matchscore", "x1")), int(p.get("Matchscore", "x2"))),
+		EntryT(int(p.get("Kills", "x1")), int(p.get("Kills", "x2"))),
+		EntryT(int(p.get("Assists", "x1")), int(p.get("Assists", "x2"))),
+		EntryT(int(p.get("Damage", "x1")), int(p.get("Damage", "x2"))),
+		RectangleT(int(p.get("CBills", "x1")), int(p.get("CBills", "y1")), int(p.get("CBills", "x2")), int(p.get("CBills", "y2"))),
+		RectangleT(int(p.get("XP", "x1")), int(p.get("XP", "y1")), int(p.get("XP", "x2")), int(p.get("XP", "y2")))
+	)
+	
+def usage():
+	print("Usage: python analyze.py\n")
+	print("    -p|--player=\"PLAYERNAME\"")
+	print("    -t|--type=\"<mwo|fraps>\"")
+	print("    [-h|--help]")
+	print("    [-v|--verbose]")
+
+def processArgs(argv):
+	global CONFIG
+	try:
+		opts, args = getopt.getopt(argv, "p:t:vh", ["player=", "type=", "verbose", "help"])
+	except getopt.GetoptError as err:
+		usage()
+		abort(repr(err))
+
+	log("ARGS: " + repr(opts))
+	
+	for opt, arg in opts:
+		if opt in ("-h", "--help"):
+			usage()
+			exit(1)
+		elif opt in ("-p", "--player"):
+			CONFIG.player = arg
+			log("player=" + arg)
+		elif opt in ("-t", "--type"):
+			CONFIG.type = arg
+			if arg == "fraps":
+				CONFIG.fnpattern = r"\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}" # FRAPS Screenshot filename datetime pattern
+				CONFIG.dtformat = "%Y-%m-%d %H-%M-%S" # FRAPS Screenshot filename datetime format
+			elif arg == "mwo":
+				CONFIG.fnpattern = r"\d{2}\.\d{2}\.\d{4}-\d{2}\.\d{2}\.\d{2}" # MWO Screenshot filename datetime pattern
+				CONFIG.dtformat = "%m.%d.%Y-%H.%M.%S" # MWO Screenshot filename datetime format
+			else:
+				usage()
+				exit(1)
+			log("type=" + arg)
+		elif opt in ("-v", "--verbose"):
+			CONFIG.loglevel = DEBUG
+			log("verbose=True")
+	if not CONFIG.player:
+		usage()
+		abort("Playername not given")
+	if not CONFIG.type:
+		usage()
+		abort("Screenshot type not given")
+
+def main(args):
+	# process commandline args
+	processArgs(args)
+	
+	# read config files
+	loadGameKnowledge()
+	
+	
+	
 	files = [f for f in listdir("./input") if isfile(join("./input", f))]
 	files.sort()
 	files.reverse()
@@ -710,6 +698,9 @@ def main():
 		id = time.strftime("%Y-%m-%d %H-%M-%S", datetime)
 		filedate = time.strftime("%Y-%m-%d %H:%M:%S", datetime)
 		with Image.open(file1) as img:
+			# load resolution information
+			debug(repr(img.size))
+			loadResolutionInfo(img.size)
 			img = preprocess(img, id, "team")
 			(dist, map) = getmap(img, id, file1)
 			debug("Found Map: \"%s\" with distance=%s" % (map, repr(dist)))
@@ -725,16 +716,16 @@ def main():
 
 		debug("%s,%s,%s,%s,%s,%d,%d,%d,%d,%d,%d,%d,%s,%s" % (filedate, result, mech, map, mode, status, score, kills, assists, damage, xp, cbills, psr, mytime))
 
-		shutil.move(file1, "./processed")
-		shutil.move(file2, "./processed")
+		#shutil.move(file1, "./processed")
+		#shutil.move(file2, "./processed")
 
 		with open("./output/data.csv", "a") as myfile:
 			myfile.write("%s,%s,%s,%s,%s,%d,%d,%d,%d,%d,%d,%d,%s,%s\n" % (filedate, result, mech, map, mode, status, score, kills, assists, damage, xp, cbills, psr, mytime))
 
 		print
 
-	success("Finished")
+	log("Finished")
 	return
 	
 if __name__ == "__main__":
-	main()
+	main(sys.argv[1:])

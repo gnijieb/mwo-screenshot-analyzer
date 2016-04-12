@@ -1,0 +1,4 @@
+Assault
+Conquest
+Domination
+Skirmish
