@@ -6,43 +6,38 @@ Warning
 Only 1920x1200 resolution supported at the moment
 The script is still pretty rough (code), though works surprisingly well (analyzed >500 games -> matched my manually entered data almost perfectly)
 
-Installation on Windows
-- Download Python installer (at time of writing used version was 2.7.11): https://www.python.org/downloads/release/python-2711/
-	- Make sure to tick the option "Add python.exe to Path"
-
+Installation on Windows (downloading is not required if you install from downloaded zip file)
+- [Download Python installer (at time of writing used version was 2.7.11): https://www.python.org/downloads/release/python-2711/]
+	- Run the installer
+	- Make sure to tick the option "Add python.exe to Path" in the installer
 - Get Python modules:
-	- update pip first: python -m pip install -U pip
+	- run command shell (cmd.exe)
+	- update pip first: "python -m pip install -U pip"
 	- Levenshtein:
-		- Download precompiled from: http://www.lfd.uci.edu/~gohlke/pythonlibs/#python-levenshtein
-		- Run: pip install python_Levenshtein-0.12.0-cp27-none-win32.whl
+		- [Download precompiled from: http://www.lfd.uci.edu/~gohlke/pythonlibs/#python-levenshtein]
+		- Run: "pip install resources\python_Levenshtein-0.12.0-cp27-none-win32.whl"
 	- Python Imaging Library (PIL fork): Pillow
 		- pip install Pillow
 	- tesseract-ocr
 		- TODO: Evaluate module tesserocr
-		- Download from: https://github.com/UB-Mannheim/tesseract/wiki
+		- [Download from: https://github.com/UB-Mannheim/tesseract/wiki]
 			- Alternate: https://github.com/tesseract-ocr/tesseract/wiki/Downloads
+			- run the installer
 			- In installer tick registry settings for PATH
-		- pip install pytesseract
+		- run command shell (cmd.exe)
+		- run: "pip install pytesseract"
 
-Requirements
-- Linux or Cygwin (looking to make it runnable in Windows)
-- Python 2.7
-- Tesseract
-- Python modules: python-Levenshtein, pytesseract
+Usage
 - You need screenshots of both the player and team stats (end of round) in a specific order:
 	- first: teamstats
 	- second: playerstats
-
-Usage
-- clone repo
+- clone repo or extract zip file
 - create directories: input, output, intermediate, processed
-- search in analyze.py for "CONFIG" parameters
-- set CONFIG.playername to the playername you want to analyze (obviously it will work only with your name)
-- set CONFIG.resinfo (resolution information of locations of the to be extracted data, currently only available for 1920x1200 resolution; extendable)
-- set CONFIG.fnpattern (MWO or FRAPS - comment in the correct one for you - this is how the filename of the screenshots is formatted to parse it)
-- set CONFIG.dtformat (MWO or FRAPS - comment in the correct one for you - this is how the datetime gets parsed from the filename of the screenshots)
 - place your screenshots in input directory
-- run analyze.py
-- if something is not recognized correctly or as expected, you are asked to open the image in input folder and enter the desired value
+- open command shell (cmd.exe)
+- go to the directory where you put the script analyze.py
+- run e.g. "python analyze.py -p PLAYERNAME -t fraps"
+	- run "python analyze.py" to see available arguments/usage
+- if something is not recognized correctly or as expected, you are asked to open the image in input folder and enter the desired value or select from a given list of best matches
 - processed screenshots are moved to the processed folder
 - the result is in form of CSV in: output/data.csv
