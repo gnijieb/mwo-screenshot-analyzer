@@ -312,7 +312,7 @@ def getplayerdata(img, id, filename):
 		row += 1
 	
 	log("Found Player: \"%s\" (searched for \"%s\") with distance=%s" % (playerfound, CONFIG.player, repr(dist)))
-	crop.save("./intermediate/%s_player.png" % id)
+	#crop.save("./intermediate/%s_player.png" % id)
 
 	result = None
 	if selectedrow < 12:
@@ -462,7 +462,7 @@ def getcbills(img, id, filename):
 		CONFIG.resinfo.cbills.y2,
 	)
 	crop = img.crop((x1, y1, x2, y2))
-	crop.save("./intermediate/%s_cbills.png" % id)
+	#crop.save("./intermediate/%s_cbills.png" % id)
 	rawcbills = pytesseract.image_to_string(crop, lang="eng", config="-psm 6")
 	rawcbills = rawcbills.replace(",", "")
 	rawcbills = rawcbills.replace(" ", "")
@@ -484,7 +484,7 @@ def getxp(img, id, filename):
 		CONFIG.resinfo.xp.y2,
 	)
 	crop = img.crop((x1, y1, x2, y2))
-	crop.save("./intermediate/%s_xp.png" % id)
+	#crop.save("./intermediate/%s_xp.png" % id)
 	rawxp = pytesseract.image_to_string(crop, lang="eng", config="-psm 6")
 	rawxp = rawxp.replace(",", "")
 	rawxp = rawxp.replace(" ", "")
