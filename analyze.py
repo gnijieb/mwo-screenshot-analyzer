@@ -716,8 +716,8 @@ def main(args):
 
 		debug("%s,%s,%s,%s,%s,%d,%d,%d,%d,%d,%d,%d,%s,%s" % (filedate, result, mech, map, mode, status, score, kills, assists, damage, xp, cbills, psr, mytime))
 
-		#shutil.move(file1, "./processed")
-		#shutil.move(file2, "./processed")
+		shutil.move(file1, "./processed")
+		shutil.move(file2, "./processed")
 
 		with open("./output/data.csv", "a") as myfile:
 			myfile.write("%s,%s,%s,%s,%s,%d,%d,%d,%d,%d,%d,%d,%s,%s\n" % (filedate, result, mech, map, mode, status, score, kills, assists, damage, xp, cbills, psr, mytime))
