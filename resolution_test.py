@@ -100,8 +100,24 @@ def loadResolutionInfo(res):
 		RectangleT(int(p.get("XP", "x1")), int(p.get("XP", "y1")), int(p.get("XP", "x2")), int(p.get("XP", "y2")))
 	)
 
+def dopreprocess(img):
+	tmp = ImageOps.invert(img)
+	# ENHANCE
+	enhancer = ImageEnhance.Sharpness(tmp)
+	tmp = enhancer.enhance(2.0)
+	# convert to grayscale
+	tmp = tmp.convert(mode="L")
+	# threshold greys to white
+	tmp = tmp.point(lambda p: p > 60 and 255)
+	return tmp
+
 def main(args):
-	red = (255,0,0)
+	preprocess = False
+	if preprocess:
+		col = (0)
+	else:
+		col = (255,0,0)
+	
 	files = [f for f in listdir("./input") if isfile(join("./input", f))]
 	files.sort()
 	files.reverse()
@@ -123,6 +139,9 @@ def main(args):
 		with Image.open(file1) as img:
 			# load resolution information
 			loadResolutionInfo(img.size)
+
+			if preprocess:
+				img = preprocess(img)
 			
 			draw = ImageDraw.Draw(img)
 			
@@ -133,7 +152,7 @@ def main(args):
 				resinfo.map.x2,
 				resinfo.map.y2
 			)
-			draw.rectangle(rect, outline=red)
+			draw.rectangle(rect, outline=col)
 			
 			# mode
 			rect = (
@@ -142,7 +161,7 @@ def main(args):
 				resinfo.mode.x2,
 				resinfo.mode.y2
 			)
-			draw.rectangle(rect, outline=red)
+			draw.rectangle(rect, outline=col)
 
 			# time
 			rect = (
@@ -151,7 +170,7 @@ def main(args):
 				resinfo.time.x2,
 				resinfo.time.y2
 			)
-			draw.rectangle(rect, outline=red)
+			draw.rectangle(rect, outline=col)
 
 			# result
 			rect = (
@@ -160,7 +179,7 @@ def main(args):
 				resinfo.result.x2,
 				resinfo.result.y2
 			)
-			draw.rectangle(rect, outline=red)
+			draw.rectangle(rect, outline=col)
 
 			row = 0
 			y1 = 0
@@ -176,28 +195,28 @@ def main(args):
 				y2 = y1 + h
 				
 				# row
-				#draw.rectangle((x1, y1, x2, y2), outline=red)
+				#draw.rectangle((x1, y1, x2, y2), outline=col)
 				
 				# player
-				draw.rectangle((resinfo.player.x1, y1, resinfo.player.x2, y2), outline=red)
+				draw.rectangle((resinfo.player.x1, y1, resinfo.player.x2, y2), outline=col)
 				
 				# mech
-				draw.rectangle((resinfo.mech.x1, y1, resinfo.mech.x2, y2), outline=red)
+				draw.rectangle((resinfo.mech.x1, y1, resinfo.mech.x2, y2), outline=col)
 				
 				# status
-				draw.rectangle((resinfo.status.x1, y1, resinfo.status.x2, y2), outline=red)
+				draw.rectangle((resinfo.status.x1, y1, resinfo.status.x2, y2), outline=col)
 				
 				# match score
-				draw.rectangle((resinfo.score.x1, y1, resinfo.score.x2, y2), outline=red)
+				draw.rectangle((resinfo.score.x1, y1, resinfo.score.x2, y2), outline=col)
 				
 				# kills
-				draw.rectangle((resinfo.kills.x1, y1, resinfo.kills.x2, y2), outline=red)
+				draw.rectangle((resinfo.kills.x1, y1, resinfo.kills.x2, y2), outline=col)
 				
 				# assists
-				draw.rectangle((resinfo.assists.x1, y1, resinfo.assists.x2, y2), outline=red)
+				draw.rectangle((resinfo.assists.x1, y1, resinfo.assists.x2, y2), outline=col)
 
 				# damage
-				draw.rectangle((resinfo.damage.x1, y1, resinfo.damage.x2, y2), outline=red)
+				draw.rectangle((resinfo.damage.x1, y1, resinfo.damage.x2, y2), outline=col)
 
 				row += 1
 
@@ -206,6 +225,9 @@ def main(args):
 			
 			
 		with Image.open(file2) as img:
+			if preprocess:
+				img = preprocess(img)
+
 			draw = ImageDraw.Draw(img)
 			
 			# cbills
@@ -215,7 +237,7 @@ def main(args):
 				resinfo.cbills.x2,
 				resinfo.cbills.y2
 			)
-			draw.rectangle(rect, outline=red)
+			draw.rectangle(rect, outline=col)
 			
 			# xp
 			rect = (
@@ -224,7 +246,7 @@ def main(args):
 				resinfo.xp.x2,
 				resinfo.xp.y2
 			)
-			draw.rectangle(rect, outline=red)
+			draw.rectangle(rect, outline=col)
 		
 			del draw
 			img.save("./output/%s" % filename2)
