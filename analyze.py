@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with mwo-screenshot-analyzer.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright 2015 gnijieb@gmail.com
+# Copyright 2015-2016 gnijieb@gmail.com
 
 from collections import namedtuple
 from subprocess import call
@@ -50,10 +50,6 @@ RectangleT = namedtuple("Rectangle", "x1 y1 x2 y2")
 ImageT = namedtuple("Image", "resolution psr psrup psrdown psrnone map mode time result rowx1 rowx2 rowheight rows player mech status score kills assists damage cbills xp")
 
 CONFIG = Configuration()
-CONFIG.fnpattern = r"\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}" # FRAPS Screenshot filename datetime pattern
-#CONFIG.fnpattern = r"\d{2}\.\d{2}\.\d{4}-\d{2}\.\d{2}\.\d{2}" # MWO Screenshot filename datetime pattern
-CONFIG.dtformat = "%Y-%m-%d %H-%M-%S" # FRAPS Screenshot filename datetime format
-#CONFIG.dtformat = "%m.%d.%Y-%H.%M.%S" # MWO Screenshot filename datetime format
 
 def abort(message, code = 1):
 	error("Aborting: " + message)
