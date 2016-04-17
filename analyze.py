@@ -121,8 +121,14 @@ def preprocess(img, id, part):
 	# convert to grayscale
 	tmp = tmp.convert(mode="L")
 	# threshold greys to white
-	tmp = tmp.point(lambda p: p > 60 and 255)
-	#tmp.save("./intermediate/%s_part_%s.png" % (id, part))
+	if CONFIG.type == "fraps":
+		threshold = 60
+	elif CONFIG.type == "mwo":
+		threshold = 80
+	tmp = tmp.point(lambda p: p > threshold and 255)
+
+	if CONFIG.loglevel >= DEBUG:
+		tmp.save("./intermediate/%s_part_%s.png" % (id, part))
 	return tmp
 
 def getmap(img, id, filename):
@@ -133,7 +139,8 @@ def getmap(img, id, filename):
 		CONFIG.resinfo.map.y2
 	)
 	crop = img.crop((x1, y1, x2, y2))
-	#crop.save("./intermediate/%s_map.png" % id)
+	if CONFIG.loglevel >= DEBUG:
+		crop.save("./intermediate/%s_map.png" % id)
 	rawmap = pytesseract.image_to_string(crop, lang="eng", config="-psm 6")
 	log("Raw Map: \"%s\" len=%s" % (rawmap, repr(len(rawmap))))
 	# if map already matches an entry in the list, success
@@ -187,7 +194,8 @@ def getmode(img, id, filename):
 		CONFIG.resinfo.mode.y2
 	)
 	crop = img.crop((x1, y1, x2, y2))
-	#crop.save("./intermediate/%s_mode.png" % id)
+	if CONFIG.loglevel >= DEBUG:
+		crop.save("./intermediate/%s_mode.png" % id)
 	rawmode = pytesseract.image_to_string(crop, lang="eng", config="-psm 6")
 	log("Raw Mode: \"%s\"" % rawmode)
 	# if mode already matches an entry in the list, success
@@ -244,14 +252,15 @@ def gettime(img, id, filename):
 		CONFIG.resinfo.time.y2
 	)
 	crop = img.crop((x1, y1, x2, y2))
-	#crop.save("./intermediate/%s_time.png" % id)
+	if CONFIG.loglevel >= DEBUG:
+		crop.save("./intermediate/%s_time.png" % id)
 	rawtime = pytesseract.image_to_string(crop, lang="eng", config="-psm 6")
 	log("Raw Time: \"%s\"" % rawtime)
 
 	while not isTimeFormat(rawtime):
 		error("Could not determine time from input: \"%s\"" % rawtime)
 		print("Check image for time: " + filename)
-		rawtime = input("Enter time: ")
+		rawtime = raw_input("Enter time: ")
 	
 	return correctTimeFormat(rawtime)
 
@@ -282,7 +291,7 @@ def getplayerdata(img, id, filename):
 		cropplayer = img.crop((CONFIG.resinfo.player.x1, y1, CONFIG.resinfo.player.x2, y2))
 		#cropplayer.load()
 		rawplayer = pytesseract.image_to_string(cropplayer, lang="eng", config="-psm 6")
-		#debug("Raw Player: \"%s\"" % rawplayer)
+		debug("Raw Player: \"%s\"" % rawplayer)
 
 		# if playername already matches, success
 		if rawplayer.lower() == CONFIG.player.lower():
@@ -307,8 +316,12 @@ def getplayerdata(img, id, filename):
 			fratio = tmpratio
 		row += 1
 	
+	y1 = CONFIG.resinfo.rows[selectedrow]
+	y2 = y1 + h
+	
 	log("Found Player: \"%s\" (searched for \"%s\") with distance=%s" % (playerfound, CONFIG.player, repr(dist)))
-	#crop.save("./intermediate/%s_player.png" % id)
+	if CONFIG.loglevel >= DEBUG:
+		crop.save("./intermediate/%s_player.png" % id)
 
 	result = None
 	if selectedrow < 12:
@@ -458,7 +471,8 @@ def getcbills(img, id, filename):
 		CONFIG.resinfo.cbills.y2,
 	)
 	crop = img.crop((x1, y1, x2, y2))
-	#crop.save("./intermediate/%s_cbills.png" % id)
+	if CONFIG.loglevel >= DEBUG:
+		crop.save("./intermediate/%s_cbills.png" % id)
 	rawcbills = pytesseract.image_to_string(crop, lang="eng", config="-psm 6")
 	rawcbills = rawcbills.replace(",", "")
 	rawcbills = rawcbills.replace(" ", "")
@@ -480,7 +494,8 @@ def getxp(img, id, filename):
 		CONFIG.resinfo.xp.y2,
 	)
 	crop = img.crop((x1, y1, x2, y2))
-	#crop.save("./intermediate/%s_xp.png" % id)
+	if CONFIG.loglevel >= DEBUG:
+		crop.save("./intermediate/%s_xp.png" % id)
 	rawxp = pytesseract.image_to_string(crop, lang="eng", config="-psm 6")
 	rawxp = rawxp.replace(",", "")
 	rawxp = rawxp.replace(" ", "")
@@ -513,11 +528,14 @@ def getpsr(img, id, filename):
 	)
 	pixel = img.getpixel((x, y))
 	debug(repr(pixel))
-	if checkpixelcolor(CONFIG.resinfo.psrup, pixel, 0.1):
+	if checkpixelcolor(CONFIG.resinfo.psrup, pixel, 0.2):
+		debug("PSR Up")
 		return "Up"
-	elif checkpixelcolor(CONFIG.resinfo.psrnone, pixel, 0.1):
+	elif checkpixelcolor(CONFIG.resinfo.psrnone, pixel, 0.2):
+		debug("PSR None")
 		return "None"
 	elif checkpixelcolor(CONFIG.resinfo.psrdown, pixel, 0.25):
+		debug("PSR Down")
 		return "Down"
 	else:
 		error("Could not determine PSR")
@@ -664,8 +682,6 @@ def main(args):
 	
 	# read config files
 	loadGameKnowledge()
-	
-	
 	
 	files = [f for f in listdir("./input") if isfile(join("./input", f))]
 	files.sort()

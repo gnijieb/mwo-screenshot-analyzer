@@ -230,6 +230,15 @@ def main(args):
 
 			draw = ImageDraw.Draw(img)
 			
+			# psr pixel
+			rect = (
+				resinfo.psr.x-1,
+				resinfo.psr.y-1,
+				resinfo.psr.x+1,
+				resinfo.psr.y+1
+			)
+			draw.rectangle(rect, outline=col)
+			
 			# cbills
 			rect = (
 				resinfo.cbills.x1,
