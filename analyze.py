@@ -24,9 +24,10 @@ import string
 from os import listdir
 from os.path import isfile, join
 import shutil
-import time
+from datetime import datetime, date, time
 import ConfigParser
 import getopt
+from importlib import import_module
 
 from Levenshtein import *
 from PIL import Image, ImageFilter, ImageOps, ImageEnhance
@@ -35,9 +36,15 @@ import pytesseract
 DEBUG = 2
 LOG   = 1
 
+MODE_MATCHONLY = 1
+MODE_MATCHPLAYER = 2
+MODE_PLAYERMATCH = 3
+
 class Configuration:
 	player = None
 	type = None
+	mode = None
+	ext = None
 	resinfo = None
 	fnpattern = None
 	dtformat = None
@@ -66,41 +73,17 @@ def log(txt):
 def error(message):
 	print("[ ERROR ] " + message)
 
-def testlev(str1, str2):
-	debug("Testing '" + str1 + "' against '" + str2 + "'")
-	debug("Abs. Levenshtein distance: " + repr(distance(str1, str2)))
-	debug("Jaro string similarity   : " + repr(jaro(str1, str2)))
-	debug("String similarity        : " + repr(ratio(str1, str2)))
-
-def test():
-	debug(Config1920x1200.entryposy[0])
-
-	goodstring = "Forest Colony"
-	badstring =  "Bulimy_Rakers"
-	halfgood =   "Boreal Felony"
-	ocrstring =  "Fores1 Colony"
-
-	testlev(goodstring, goodstring)
-
-	testlev(goodstring, ocrstring)
-
-	testlev(goodstring, halfgood)
-
-	testlev(goodstring, badstring)
-
-	testlev(goodstring, "Forest")
-	testlev(goodstring, "Colony")
-
 def isTimeFormat(input):
     try:
-        time.strptime(input, "%M:%S")
+        datetime.strptime(input, "%M:%S")
         return True
     except ValueError:
         return False
 
 def correctTimeFormat(input):
-	mytime = time.strptime(input, "%M:%S")
-	return time.strftime("%H:%M:%S", mytime)
+	mytime = datetime.strptime(input, "%M:%S")
+	seconds = mytime.minute*60 + mytime.second
+	return seconds
 
 def preprocess(img, id, part):
 	R, G, B = 0, 1, 2
@@ -125,6 +108,8 @@ def preprocess(img, id, part):
 		threshold = 60
 	elif CONFIG.type == "mwo":
 		threshold = 80
+	elif CONFIG.type == "steam":
+		threshold = 90
 	tmp = tmp.point(lambda p: p > threshold and 255)
 
 	if CONFIG.loglevel >= DEBUG:
@@ -629,18 +614,50 @@ def loadResolutionInfo(res):
 		RectangleT(int(p.get("CBills", "x1")), int(p.get("CBills", "y1")), int(p.get("CBills", "x2")), int(p.get("CBills", "y2"))),
 		RectangleT(int(p.get("XP", "x1")), int(p.get("XP", "y1")), int(p.get("XP", "x2")), int(p.get("XP", "y2")))
 	)
+
+def writeCSV(dtnow, matchdate, player, result, mech, map, mode, status, score, kills, assists, damage, xp, cbills, psr, gametime):
+	defaultformat = "matchdate,playername,matchresult,mech,map,gamemode,survivalstatus,matchscore,kills,assists,damage,xp,cbills,psr,gametime"
 	
+	buf = defaultformat
+	buf = buf.replace("matchdate", matchdate)
+	buf = buf.replace("playername", player)
+	buf = buf.replace("matchresult", result)
+	buf = buf.replace("mech", mech)
+	buf = buf.replace("map", map)
+	buf = buf.replace("gamemode", mode)
+	buf = buf.replace("survivalstatus", repr(status))
+	buf = buf.replace("matchscore", repr(score))
+	buf = buf.replace("kills", repr(kills))
+	buf = buf.replace("assists", repr(assists))
+	buf = buf.replace("damage", repr(damage))
+	buf = buf.replace("gametime", repr(gametime))
+	if xp:
+		buf = buf.replace("xp", repr(xp))
+	if cbills:
+		buf = buf.replace("cbills", repr(cbills))
+	if psr:
+		buf = buf.replace("psr", psr)
+	
+	with open("./output/%s_data.csv" % (dtnow), "a") as myfile:
+		myfile.write(buf+"\n")
+
 def usage():
 	print("Usage: python analyze.py\n")
 	print("    -p|--player=\"PLAYERNAME\"")
-	print("    -t|--type=\"<mwo|fraps>\"")
+	print("    -t|--type=\"<mwo|fraps|steam>\"")
+	print("    -m|--mode=<1|2|3>")
+	print("        1: matchstats only")
+	print("        2: matchstats and playerstats (screenshots in this order)")
+	print("        3: playerstats and matchstats (screenshots in this order)")
+	print("    -x|--ext=\"NAME\"")
+	print("        Name of external processing module")
 	print("    [-h|--help]")
 	print("    [-v|--verbose]")
 
 def processArgs(argv):
 	global CONFIG
 	try:
-		opts, args = getopt.getopt(argv, "p:t:vh", ["player=", "type=", "verbose", "help"])
+		opts, args = getopt.getopt(argv, "p:t:m:x:vh", ["player=", "type=", "mode=", "ext=", "verbose", "help"])
 	except getopt.GetoptError as err:
 		usage()
 		abort(repr(err))
@@ -662,10 +679,19 @@ def processArgs(argv):
 			elif arg == "mwo":
 				CONFIG.fnpattern = r"\d{2}\.\d{2}\.\d{4}-\d{2}\.\d{2}\.\d{2}" # MWO Screenshot filename datetime pattern
 				CONFIG.dtformat = "%m.%d.%Y-%H.%M.%S" # MWO Screenshot filename datetime format
+			elif arg == "steam":
+				CONFIG.fnpattern = r"\d{4}\d{2}\d{2}\d{2}\d{2}\d{2}" # Steam Screenshot filename datetime pattern
+				CONFIG.dtformat = "%Y%m%d%H%M%S" # Steam Screenshot filename datetime format
 			else:
 				usage()
 				exit(1)
 			log("type=" + arg)
+		elif opt in ("-m", "--mode"):
+			CONFIG.mode = int(arg)
+			log("mode=" + arg)
+		elif opt in ("-x", "--ext"):
+			CONFIG.ext = arg
+			log("ext=" + arg)
 		elif opt in ("-v", "--verbose"):
 			CONFIG.loglevel = DEBUG
 			log("verbose=True")
@@ -675,8 +701,15 @@ def processArgs(argv):
 	if not CONFIG.type:
 		usage()
 		abort("Screenshot type not given")
+	if not CONFIG.mode:
+		usage()
+		abort("Mode not given")
 
 def main(args):
+	global CONFIG
+	dtnow = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
+	log("Script started at " + dtnow)
+
 	# process commandline args
 	processArgs(args)
 	
@@ -687,28 +720,43 @@ def main(args):
 	files.sort()
 	files.reverse()
 	print(files)
-	if len(files)%2 != 0:
-		error("Odd number of files found: %d" % len(files))
-		return
-	
-	count = len(files)/2
+	if CONFIG.mode == MODE_MATCHPLAYER or CONFIG.mode == MODE_PLAYERMATCH:
+		if len(files)%2 != 0:
+			error("Odd number of files found: %d" % len(files))
+			return
 	
 	while len(files) != 0:
-		(result, mech, status, score, kills, assists, damage, cbills, xp, psr) = (None,)*10
-		file1 = files.pop()
-		file2 = files.pop()
-		log(file1 + " " + file2)
+		(map, mode, gametime, result, mech, status, score, kills, assists, damage, cbills, xp, psr) = (None,)*13
+		file1 = None
+		file2 = None
+		
+		if CONFIG.mode == MODE_MATCHONLY:
+			file1 = files.pop()
+			log(file1)
+		if CONFIG.mode == MODE_MATCHPLAYER:
+			file1 = files.pop()
+			file2 = files.pop()
+			log(file1 + " " + file2)
+		if CONFIG.mode == MODE_PLAYERMATCH:
+			file2 = files.pop()
+			file1 = files.pop()
+			log(file1 + " " + file2)
 
 		match = re.search(CONFIG.fnpattern, file1)
 		if not match:
 			error("Screenshot filename pattern: No match")
 			continue
-		datetime = time.strptime(match.group(), CONFIG.dtformat)
+		dtfile = datetime.strptime(match.group(), CONFIG.dtformat)
 
-		file1 = "./input/" + file1
-		file2 = "./input/" + file2
-		id = time.strftime("%Y-%m-%d %H-%M-%S", datetime)
-		filedate = time.strftime("%Y-%m-%d %H:%M:%S", datetime)
+		if CONFIG.mode == MODE_MATCHONLY:
+			file1 = "./input/" + file1
+		else:
+			file1 = "./input/" + file1
+			file2 = "./input/" + file2
+		id = dtfile.strftime("%Y-%m-%d %H-%M-%S")
+		matchdate = dtfile.strftime("%Y-%m-%d %H:%M:%S")
+
+		# file1 is always matchstats
 		with Image.open(file1) as img:
 			# load resolution information
 			debug(repr(img.size))
@@ -718,22 +766,30 @@ def main(args):
 			debug("Found Map: \"%s\" with distance=%s" % (map, repr(dist)))
 			(dist, mode) = getmode(img, id, file1)
 			debug("Found Mode: \"%s\" with distance=%s" % (mode, repr(dist)))
-			mytime = gettime(img, id, file1)
+			gametime = gettime(img, id, file1)
 			(result, mech, status, score, kills, assists, damage) = getplayerdata(img, id, file1)
-		with Image.open(file2) as img:
-			psr = getpsr(img, id, file2)
-			img = preprocess(img, id, "player")
-			cbills = getcbills(img, id, file2)
-			xp = getxp(img, id, file2)
+		if CONFIG.mode == MODE_MATCHPLAYER or CONFIG.mode == MODE_PLAYERMATCH:
+			with Image.open(file2) as img:
+				psr = getpsr(img, id, file2)
+				img = preprocess(img, id, "player")
+				cbills = getcbills(img, id, file2)
+				xp = getxp(img, id, file2)
 
-		debug("%s,%s,%s,%s,%s,%d,%d,%d,%d,%d,%d,%d,%s,%s" % (filedate, result, mech, map, mode, status, score, kills, assists, damage, xp, cbills, psr, mytime))
+		if CONFIG.mode == MODE_MATCHONLY:
+			debug("%s,%s,%s,%s,%s,%s,%d,%d,%d,%d,%d,%d" % (matchdate, CONFIG.player, result, mech, map, mode, status, score, kills, assists, damage, gametime))
+		else:
+			debug("%s,%s,%s,%s,%s,%s,%d,%d,%d,%d,%d,%d,%d,%s,%d" % (matchdate, CONFIG.player, result, mech, map, mode, status, score, kills, assists, damage, xp, cbills, psr, gametime))
 
 		shutil.move(file1, "./processed")
 		shutil.move(file2, "./processed")
+		
+		writeCSV(dtnow, matchdate, CONFIG.player, result, mech, map, mode, status, score, kills, assists, damage, xp, cbills, psr, gametime)
 
-		with open("./output/data.csv", "a") as myfile:
-			myfile.write("%s,%s,%s,%s,%s,%d,%d,%d,%d,%d,%d,%d,%s,%s\n" % (filedate, result, mech, map, mode, status, score, kills, assists, damage, xp, cbills, psr, mytime))
-
+		if CONFIG.ext:
+			extmod = import_module(CONFIG.ext)
+			ext = getattr(extmod, "ext")
+			ext(matchdate, CONFIG.player, result, mech, map, mode, status, score, kills, assists, damage, xp, cbills, psr, gametime)
+		
 		print
 
 	log("Finished")
