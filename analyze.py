@@ -319,6 +319,12 @@ def getplayerdata(img, id, filename):
 	cropmech = img.crop((CONFIG.resinfo.mech.x1, y1, CONFIG.resinfo.mech.x2, y2))
 	rawmech = pytesseract.image_to_string(cropmech, lang="eng", config="-psm 6")
 	debug("Raw mech: \"%s\"" % rawmech)
+
+	# cut off special (C),(I) etc. designations at the end
+	pos = rawmech.rfind("(")
+	if pos != -1 and pos >= 5: # 5 is minimum length of mech chassis+variant designation
+		rawmech = rawmech[:pos]
+
 	mechfound = False
 	for mech in Mechs:
 		if rawmech.lower() == mech.lower():
@@ -362,6 +368,9 @@ def getplayerdata(img, id, filename):
 		debug("Best jaro match: %s (%4.4f)" % (jaro_mech, fjaro))
 		debug("Best ratio match: %s (%4.4f)" % (ratio_mech, fratio))
 		
+		if dist_mech == jaro_mech and jaro_mech == ratio_mech:
+			possiblemechs.insert(0, dist_mech + " (best match)")
+		
 		# check the quality of the found string
 		if dist > len(rawmech)*0.6 and fjaro < 0.5 and fratio < 0.5:
 			debug("Quality of found mech not good enough.")
@@ -389,9 +398,9 @@ def getplayerdata(img, id, filename):
 			x = int(input("Enter mech number: "))
 			log("Mech entered: " + repr(x))
 		if x == 0:
-			correctmech = input("Enter mech name: ")
+			correctmech = raw_input("Enter mech name: ")
 		else:
-			correctmech = possiblemechs[x-1]
+			correctmech = possiblemechs[x-1].replace(" (best match)", "")
 
 	# remove brackets in mechname (e.g. (C), (I), (S) and so on)
 	#correctmech = re.sub(r"\(.\)", "", correctmech)
@@ -716,6 +725,10 @@ def main(args):
 	# read config files
 	loadGameKnowledge()
 	
+	if CONFIG.ext:
+		extmod = import_module(CONFIG.ext)
+		ext = getattr(extmod, "ext")
+
 	files = [f for f in listdir("./input") if isfile(join("./input", f))]
 	files.sort()
 	files.reverse()
@@ -786,8 +799,6 @@ def main(args):
 		writeCSV(dtnow, matchdate, CONFIG.player, result, mech, map, mode, status, score, kills, assists, damage, xp, cbills, psr, gametime)
 
 		if CONFIG.ext:
-			extmod = import_module(CONFIG.ext)
-			ext = getattr(extmod, "ext")
 			ext(matchdate, CONFIG.player, result, mech, map, mode, status, score, kills, assists, damage, xp, cbills, psr, gametime)
 		
 		print

@@ -33,7 +33,11 @@ def main():
 	
 	with open("./basedata/mechs.txt", "w") as myfile:
 		for mech in Mechs:
-			myfile.write(mech+"\n")
+			if "(L)" in mech:
+				mech = mech[:-3]
+				myfile.write(mech+"\n")
+			elif "(" not in mech:
+				myfile.write(mech+"\n")
 	print("Done")
 	return
 	
