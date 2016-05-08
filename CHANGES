@@ -1,0 +1,9 @@
+V0.3
+PSR location has changed with the April 19th 2016 patch (older screenshots will not have the PSR detected correctly)
+Matchtime output is now formatted in seconds instead of minuts:seconds
+Enabled mode selection of screenshot order: matchstats only, matchstats+playerstats, playerstats+matchstats
+Added resolution info for 2560x1440 - provided by Failoe
+Added option for an external processing of the generated data (see ext_example.py)
+Added script update_mechs.py which updates the basedata/mechs.txt with current data from smurfy.net using its JSON API - The only downside of this is the mechnames on smurfy almost never include any special designations other than (C) or (L). So there could be increased problems when trying to detect mechnames with OCR when they contain designations like (I), (R), (P) and so on.
+mechs.txt doesn't contain any special designations in brackets anymore (e.g. (C), (R), etc.)
+Updated README with hopefully clear instructions
