@@ -1,4 +1,6 @@
 Assault
 Conquest
 Domination
+Escort
+Incursion
 Skirmish

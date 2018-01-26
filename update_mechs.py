@@ -19,27 +19,36 @@
 import sys
 import json
 import urllib
+import re
+
 
 def main():
-	url = "http://mwo.smurfy-net.de/api/data/mechs.json"
-	response = urllib.urlopen(url)
-	data = json.load(response)
+    url = "http://mwo.smurfy-net.de/api/data/mechs.json"
+    response = urllib.urlopen(url)
+    data = json.load(response)
 
-	Mechs = []
-	
-	for entry in data.values():
-		Mechs.append(entry["translated_short_name"])
-	Mechs.sort()
-	
-	with open("./basedata/mechs.txt", "w") as myfile:
-		for mech in Mechs:
-			if "(L)" in mech:
-				mech = mech[:-3]
-				myfile.write(mech+"\n")
-			elif "(" not in mech:
-				myfile.write(mech+"\n")
-	print("Done")
-	return
-	
+    Mechs = []
+
+    # build list from smurfy data
+    for entry in data.values():
+        Mechs.append(entry["translated_short_name"])
+
+    # remove any special designations in parentheses: e.g. (C), (L)
+    for i, mech in enumerate(Mechs):
+        if "(" in mech:
+            Mechs[i] = re.sub(r"\(.*\)$", "", mech)
+
+    # remove any duplicates (normal variant and loyalty)
+    Mechs = list(set(Mechs))
+    # and sort
+    Mechs.sort()
+
+    with open("./basedata/mechs.txt", "w") as myfile:
+        for mech in Mechs:
+            myfile.write(mech + "\n")
+    print("Done")
+    return
+
+
 if __name__ == "__main__":
-	main()
+    main()

@@ -2,3 +2,8 @@ output/
 input/
 processed/
 intermediate/
+resources/
+*.pyc
+analyze_failoe.py
+drop_table.py
+ext_db.py
